@@ -67,13 +67,13 @@ public final class NetworkInstrumentation {
     // MARK: - Lifecycle
 
     private init() {}
-    
+
     /// 获取干净的 .default configuration（不包含 CaptureURLProtocol）
     /// 用于 CaptureURLProtocol 内部创建 URLSession，避免循环
     public static func cleanDefaultConfiguration() -> URLSessionConfiguration {
         URLSessionConfigurationSwizzle.cleanDefaultConfiguration()
     }
-    
+
     // MARK: - Start / Stop
 
     /// 启动网络捕获
@@ -206,7 +206,22 @@ public final class CaptureURLProtocol: URLProtocol {
 
         // 只拦截 HTTP/HTTPS 请求
         guard let scheme = request.url?.scheme?.lowercased() else { return false }
-        return scheme == "http" || scheme == "https"
+        guard scheme == "http" || scheme == "https" else { return false }
+
+        // 跳过 WebSocket 升级请求（这些由 WebSocketInstrumentation 处理）
+        // WebSocket 握手请求包含 Upgrade: websocket 头
+        if
+            let upgradeHeader = request.value(forHTTPHeaderField: "Upgrade"),
+            upgradeHeader.lowercased() == "websocket" {
+            return false
+        }
+
+        // 检查 URL 是否以 /debug-bridge 结尾（DebugProbe 自身的 WebSocket 连接）
+        if let path = request.url?.path, path.hasSuffix("/debug-bridge") {
+            return false
+        }
+
+        return true
     }
 
     override public class func canonicalRequest(for request: URLRequest) -> URLRequest {
