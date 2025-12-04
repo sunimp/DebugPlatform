@@ -17,6 +17,7 @@ struct RealtimeMessage: Content {
         case stats
         case deviceConnected
         case deviceDisconnected
+        case breakpointHit
     }
 
     let type: MessageType
@@ -78,9 +79,9 @@ final class RealtimeStreamHandler: LifecycleHandler, @unchecked Sendable {
         case "log":
             types = [.logEvent]
         case "both", "all":
-            types = [.httpEvent, .wsEvent, .logEvent, .stats]
+            types = [.httpEvent, .wsEvent, .logEvent, .stats, .breakpointHit]
         default:
-            types = [.httpEvent, .wsEvent, .logEvent]
+            types = [.httpEvent, .wsEvent, .logEvent, .breakpointHit]
         }
 
         let subscriber = StreamSubscriber(deviceId: deviceId, types: types, webSocket: ws)
@@ -144,6 +145,22 @@ final class RealtimeStreamHandler: LifecycleHandler, @unchecked Sendable {
         let message = RealtimeMessage(type: .deviceDisconnected, deviceId: deviceId, payload: payload)
         broadcastMessage(message)
         print("[RealtimeStream] Broadcasted device disconnected: \(deviceId)")
+    }
+
+    /// 广播断点命中事件
+    func broadcastBreakpointHit(_ hit: BreakpointHitDTO, deviceId: String) {
+        let encoder = JSONEncoder()
+        encoder.dateEncodingStrategy = .iso8601
+
+        guard
+            let payloadData = try? encoder.encode(hit),
+            let payload = String(data: payloadData, encoding: .utf8) else {
+            return
+        }
+
+        let message = RealtimeMessage(type: .breakpointHit, deviceId: deviceId, payload: payload)
+        broadcastMessage(message)
+        print("[RealtimeStream] Broadcasted breakpoint hit: requestId=\(hit.requestId)")
     }
 
     /// 广播单个消息给所有相关订阅者

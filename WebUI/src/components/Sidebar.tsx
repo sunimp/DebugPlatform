@@ -1,23 +1,34 @@
 import { useEffect, useMemo, useState, useRef } from 'react'
-import { useNavigate, Link } from 'react-router-dom'
+import { useNavigate, Link, useLocation } from 'react-router-dom'
 import { useConnectionStore } from '@/stores/connectionStore'
 import { useDeviceStore } from '@/stores/deviceStore'
 import { useHTTPStore } from '@/stores/httpStore'
+import { useWSStore } from '@/stores/wsStore'
 import { useRuleStore } from '@/stores/ruleStore'
 import clsx from 'clsx'
 
 export function Sidebar() {
   const navigate = useNavigate()
+  const location = useLocation()
   const { isServerOnline } = useConnectionStore()
 
   // Device Store
   const { devices, fetchDevices, currentDeviceId, selectDevice } = useDeviceStore()
 
   // HTTP Store (for Domain List)
-  const { events, setFilter, filters } = useHTTPStore()
+  const { events, setFilter: setHttpFilter, filters: httpFilters } = useHTTPStore()
+
+  // WebSocket Store (for Host List)
+  const { sessions: wsSessions, setFilter: setWsFilter, filters: wsFilters } = useWSStore()
 
   // Rule Store
-  const { fetchRules, getDomainRule, createOrUpdateRule, deleteRule } = useRuleStore()
+  const { getDomainRule, createOrUpdateRule, deleteRule } = useRuleStore()
+
+  // Get current tab from URL
+  const currentTab = useMemo(() => {
+    const searchParams = new URLSearchParams(location.search)
+    return searchParams.get('tab') || 'http'
+  }, [location.search])
 
   // Domain search filter
   const [domainSearch, setDomainSearch] = useState('')
@@ -28,22 +39,38 @@ export function Sidebar() {
 
   useEffect(() => {
     fetchDevices()
-    fetchRules()
+    // Note: fetchRules() disabled - traffic rules API not implemented
   }, [])
 
-  // Extract Domains from Events
+  // Extract Domains/Hosts from Events based on current tab
   const domainStats = useMemo(() => {
-    const stats: Record<string, number> = {}
-    events.forEach(e => {
-      try {
-        const hostname = new URL(e.url).hostname
-        stats[hostname] = (stats[hostname] || 0) + 1
-      } catch { }
-    })
-    return Object.entries(stats)
-      .map(([domain, count]) => ({ domain, count }))
-      .sort((a, b) => b.count - a.count)
-  }, [events])
+    if (currentTab === 'websocket') {
+      // Extract hosts from WebSocket sessions
+      const stats: Record<string, number> = {}
+      wsSessions.forEach(session => {
+        try {
+          const url = new URL(session.url)
+          const host = url.hostname
+          stats[host] = (stats[host] || 0) + 1
+        } catch { }
+      })
+      return Object.entries(stats)
+        .map(([domain, count]) => ({ domain, count }))
+        .sort((a, b) => b.count - a.count)
+    } else {
+      // Extract domains from HTTP events (default)
+      const stats: Record<string, number> = {}
+      events.forEach(e => {
+        try {
+          const hostname = new URL(e.url).hostname
+          stats[hostname] = (stats[hostname] || 0) + 1
+        } catch { }
+      })
+      return Object.entries(stats)
+        .map(([domain, count]) => ({ domain, count }))
+        .sort((a, b) => b.count - a.count)
+    }
+  }, [events, wsSessions, currentTab])
 
   // Detect new requests and highlight domains
   useEffect(() => {
@@ -91,11 +118,29 @@ export function Sidebar() {
   }
 
   const handleDomainClick = (domain: string) => {
-    if (filters.domain === domain) {
-      setFilter('domain', '') // Toggle off
+    if (currentTab === 'websocket') {
+      // Toggle WebSocket host filter
+      if (wsFilters.host === domain) {
+        setWsFilter('host', '')
+      } else {
+        setWsFilter('host', domain)
+      }
     } else {
-      setFilter('domain', domain)
+      // Toggle HTTP domain filter
+      if (httpFilters.domain === domain) {
+        setHttpFilter('domain', '')
+      } else {
+        setHttpFilter('domain', domain)
+      }
     }
+  }
+
+  // Check if domain is currently selected as filter
+  const isDomainSelected = (domain: string) => {
+    if (currentTab === 'websocket') {
+      return wsFilters.host === domain
+    }
+    return httpFilters.domain === domain
   }
 
   // Cycle: None -> Whitelist (Highlight) -> Blacklist (Hide) -> None
@@ -184,7 +229,10 @@ export function Sidebar() {
                 <div className="min-w-0 flex-1">
                   <div className="font-medium truncate text-sm">{device.deviceName}</div>
                   <div className="text-2xs text-text-muted truncate mt-0.5">
-                    {device.appName} <span className="opacity-60">v{device.appVersion}</span>
+                    {device.appName} <span className="opacity-60">{device.appVersion} ({device.buildNumber})</span>
+                  </div>
+                  <div className="text-2xs text-text-muted truncate mt-0.5">
+                    {device.platform} <span className="opacity-60">{device.systemVersion}</span>
                   </div>
                 </div>
                 <span className="text-text-muted opacity-0 group-hover:opacity-100 transition-opacity text-sm">→</span>
@@ -201,17 +249,17 @@ export function Sidebar() {
         </div>
 
         {/* Separator */}
-        {currentDeviceId && (
+        {currentDeviceId && (currentTab === 'http' || currentTab === 'websocket') && (
           <div className="divider mx-5 my-2" />
         )}
 
-        {/* Domain List Section (Only if device selected) */}
-        {currentDeviceId && (
+        {/* Domain/Host List Section (Only for HTTP/WebSocket tabs) */}
+        {currentDeviceId && (currentTab === 'http' || currentTab === 'websocket') && (
           <div className="px-3 py-3">
             <div className="px-2 mb-3 text-xs font-semibold text-text-secondary uppercase tracking-wider flex justify-between items-center">
               <span className="flex items-center gap-2">
-                <span className="text-sm">🌐</span>
-                Domains
+                <span className="text-sm">{currentTab === 'websocket' ? '🔌' : '🌐'}</span>
+                {currentTab === 'websocket' ? 'WS Hosts' : 'Domains'}
               </span>
               <span className="bg-accent-blue/10 text-accent-blue px-2 py-0.5 rounded-full text-2xs font-bold">{domainStats.length}</span>
             </div>
@@ -224,7 +272,7 @@ export function Sidebar() {
                   type="text"
                   value={domainSearch}
                   onChange={(e) => setDomainSearch(e.target.value)}
-                  placeholder="搜索域名..."
+                  placeholder={currentTab === 'websocket' ? '搜索主机...' : '搜索域名...'}
                   className="w-full pl-8 pr-3 py-2 text-xs bg-bg-medium border border-border rounded text-text-primary placeholder:text-text-muted focus:outline-none focus:border-primary transition-colors"
                 />
               </div>
@@ -235,7 +283,7 @@ export function Sidebar() {
                 const rule = getDomainRule(domain)
                 const isWhitelist = rule?.action === 'highlight'
                 const isBlacklist = rule?.action === 'hide'
-                const isSelected = filters.domain === domain
+                const isSelected = isDomainSelected(domain)
                 const isHighlighted = highlightedDomains.has(domain)
 
                 return (
@@ -285,14 +333,14 @@ export function Sidebar() {
               {filteredDomainStats.length === 0 && domainSearch && (
                 <div className="px-4 py-4 text-center text-xs text-text-muted bg-bg-light/20 rounded border border-dashed border-border">
                   <span className="text-lg block mb-1 opacity-50">🔍</span>
-                  未找到匹配的域名
+                  {currentTab === 'websocket' ? '未找到匹配的主机' : '未找到匹配的域名'}
                 </div>
               )}
 
-              {domainStats.length === 0 && (
+              {domainStats.length === 0 && !domainSearch && (
                 <div className="px-4 py-4 text-center text-xs text-text-muted bg-bg-light/20 rounded border border-dashed border-border">
-                  <span className="text-lg block mb-1 opacity-50">🌐</span>
-                  暂无域名记录
+                  <span className="text-lg block mb-1 opacity-50">{currentTab === 'websocket' ? '🔌' : '🌐'}</span>
+                  {currentTab === 'websocket' ? '暂无 WebSocket 主机' : '暂无域名记录'}
                 </div>
               )}
             </div>

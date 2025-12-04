@@ -260,6 +260,7 @@ export interface WSSessionFilters {
   page?: number
   pageSize?: number
   urlContains?: string
+  host?: string
   isOpen?: boolean
   timeFrom?: string
   timeTo?: string
@@ -273,6 +274,7 @@ export async function getWSSessions(
   if (filters.page) params.set('page', String(filters.page))
   if (filters.pageSize) params.set('pageSize', String(filters.pageSize))
   if (filters.urlContains) params.set('urlContains', filters.urlContains)
+  if (filters.host) params.set('host', filters.host)
   if (filters.isOpen !== undefined) params.set('isOpen', String(filters.isOpen))
   if (filters.timeFrom) params.set('timeFrom', filters.timeFrom)
   if (filters.timeTo) params.set('timeTo', filters.timeTo)
@@ -312,6 +314,17 @@ export async function getWSFrameDetail(
   return fetchJSON(
     `${API_BASE}/devices/${deviceId}/ws-sessions/${sessionId}/frames/${frameId}`
   )
+}
+
+export async function batchDeleteWSSessions(
+  deviceId: string,
+  ids: string[]
+): Promise<{ affected: number; success: boolean }> {
+  return fetchJSON(`${API_BASE}/devices/${deviceId}/ws-sessions/batch/delete`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ ids }),
+  })
 }
 
 // ============================================================================

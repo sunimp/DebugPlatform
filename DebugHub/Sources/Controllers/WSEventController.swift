@@ -16,6 +16,7 @@ struct WSEventController: RouteCollection {
         ws.get("ws-sessions", ":sessionId", use: getWSSession)
         ws.get("ws-sessions", ":sessionId", "frames", use: listWSFrames)
         ws.get("ws-sessions", ":sessionId", "frames", ":frameId", use: getWSFramePayload)
+        ws.post("ws-sessions", "batch", "delete", use: batchDeleteSessions)
     }
 
     // MARK: - 获取 WebSocket 会话列表
@@ -28,41 +29,61 @@ struct WSEventController: RouteCollection {
         let page = req.query[Int.self, at: "page"] ?? 1
         let pageSize = min(req.query[Int.self, at: "pageSize"] ?? 50, 100)
         let urlContains = req.query[String.self, at: "urlContains"]
-        let isOpen = req.query[Bool.self, at: "isOpen"]
+        let host = req.query[String.self, at: "host"]
+        
+        // Parse isOpen from string to avoid Vapor's Bool parsing issue (returns false instead of nil)
+        let isOpenStr = req.query[String.self, at: "isOpen"]
+        let isOpen: Bool? = isOpenStr.flatMap { $0 == "true" ? true : ($0 == "false" ? false : nil) }
+        
         let timeFrom = req.query[Date.self, at: "timeFrom"]
         let timeTo = req.query[Date.self, at: "timeTo"]
 
-        var query = WSSessionModel.query(on: req.db)
-            .filter(\.$deviceId == deviceId)
-
+        // WORKAROUND: Fluent filter(\.$deviceId == deviceId) returns 0 results
+        // despite the data existing. Using in-memory filtering as workaround.
+        let allSessions = try await WSSessionModel.query(on: req.db).all()
+        var filteredSessions = allSessions.filter { $0.deviceId == deviceId }
+        
         if let urlContains {
-            query = query.filter(\.$url ~~ urlContains)
+            filteredSessions = filteredSessions.filter { $0.url.contains(urlContains) }
         }
-
-        if let isOpen {
-            if isOpen {
-                query = query.filter(\.$disconnectTime == nil)
-            } else {
-                query = query.filter(\.$disconnectTime != nil)
+        
+        if let host {
+            filteredSessions = filteredSessions.filter { session in
+                session.url.contains("://\(host)/") || 
+                session.url.contains("://\(host):") ||
+                session.url.hasSuffix("://\(host)")
             }
         }
-
+        
+        if let isOpen {
+            if isOpen {
+                filteredSessions = filteredSessions.filter { $0.disconnectTime == nil }
+            } else {
+                filteredSessions = filteredSessions.filter { $0.disconnectTime != nil }
+            }
+        }
+        
         if let timeFrom {
-            query = query.filter(\.$connectTime >= timeFrom)
+            filteredSessions = filteredSessions.filter { $0.connectTime >= timeFrom }
         }
-
+        
         if let timeTo {
-            query = query.filter(\.$connectTime <= timeTo)
+            filteredSessions = filteredSessions.filter { $0.connectTime <= timeTo }
         }
+        
+        let total = filteredSessions.count
+        
+        // Sort by connectTime descending
+        filteredSessions.sort { $0.connectTime > $1.connectTime }
+        
+        // Pagination
+        let startIndex = (page - 1) * pageSize
+        let endIndex = min(startIndex + pageSize, filteredSessions.count)
+        let pagedSessions = startIndex < filteredSessions.count 
+            ? Array(filteredSessions[startIndex..<endIndex]) 
+            : []
 
-        let total = try await query.count()
-
-        let sessions = try await query
-            .sort(\.$connectTime, .descending)
-            .range((page - 1) * pageSize..<page * pageSize)
-            .all()
-
-        let items = sessions.map { session in
+        let items = pagedSessions.map { session in
             WSSessionSummaryDTO(
                 id: session.id!,
                 url: session.url,
@@ -218,6 +239,35 @@ struct WSEventController: RouteCollection {
             isMocked: frame.isMocked
         )
     }
+
+    // MARK: - 批量删除会话
+
+    func batchDeleteSessions(req: Request) async throws -> WSBatchDeleteResponse {
+        guard let deviceId = req.parameters.get("deviceId") else {
+            throw Abort(.badRequest, reason: "Missing deviceId")
+        }
+
+        let request = try req.content.decode(WSBatchDeleteRequest.self)
+
+        // 先删除关联的帧
+        try await WSFrameModel.query(on: req.db)
+            .filter(\.$deviceId == deviceId)
+            .filter(\.$sessionId ~~ request.ids)
+            .delete()
+
+        // 再删除会话
+        let count = try await WSSessionModel.query(on: req.db)
+            .filter(\.$deviceId == deviceId)
+            .filter(\.$id ~~ request.ids)
+            .count()
+
+        try await WSSessionModel.query(on: req.db)
+            .filter(\.$deviceId == deviceId)
+            .filter(\.$id ~~ request.ids)
+            .delete()
+
+        return WSBatchDeleteResponse(affected: count, success: true)
+    }
 }
 
 // MARK: - DTOs
@@ -278,4 +328,15 @@ struct WSFrameDetailDTO: Content {
     let payloadSize: Int
     let timestamp: Date
     let isMocked: Bool
+}
+
+// MARK: - 批量操作 DTOs
+
+struct WSBatchDeleteRequest: Content {
+    let ids: [String]
+}
+
+struct WSBatchDeleteResponse: Content {
+    let affected: Int
+    let success: Bool
 }

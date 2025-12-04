@@ -2,6 +2,7 @@ import { useEffect } from 'react'
 import { BrowserRouter, Routes, Route, useLocation, Link } from 'react-router-dom'
 import { Sidebar } from '@/components/Sidebar'
 import { DeviceDetailPage } from '@/pages/DeviceDetailPage'
+import { DeviceListPage } from '@/pages/DeviceListPage'
 import { ApiDocsPage } from '@/pages/ApiDocsPage'
 import { HealthPage } from '@/pages/HealthPage'
 import { RulesPage } from '@/pages/RulesPage'
@@ -43,15 +44,7 @@ function AppContent() {
 
         <div className="flex-1 overflow-hidden relative">
           <Routes>
-            <Route path="/" element={
-              <div className="h-full flex flex-col items-center justify-center text-text-muted">
-                <div className="w-20 h-20 rounded-lg bg-primary/10 flex items-center justify-center mb-6 border border-border">
-                  <span className="text-4xl">📱</span>
-                </div>
-                <h2 className="text-xl font-semibold text-text-primary mb-2">Select a Device</h2>
-                <p className="text-sm text-text-secondary">Choose a device from the sidebar to start debugging.</p>
-              </div>
-            } />
+            <Route path="/" element={<DeviceListPage />} />
             <Route path="/device/:deviceId" element={<DeviceDetailPage />} />
             <Route path="/rules" element={<RulesPage />} />
             <Route path="/api-docs" element={<ApiDocsPage />} />

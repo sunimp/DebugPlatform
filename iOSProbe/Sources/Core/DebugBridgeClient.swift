@@ -221,11 +221,13 @@ public final class DebugBridgeClient: NSObject {
             
         case let .updateBreakpointRules(rules):
             DebugLog.info(.bridge, "Received \(rules.count) breakpoint rules")
-            // TODO: 实现断点规则更新处理
+            // 更新断点引擎规则
+            BreakpointEngine.shared.updateRules(rules)
             
         case let .updateChaosRules(rules):
             DebugLog.info(.bridge, "Received \(rules.count) chaos rules")
-            // TODO: 实现故障注入规则更新处理
+            // 更新故障注入引擎规则
+            ChaosEngine.shared.updateRules(rules)
             
         case let .replayRequest(payload):
             DebugLog.info(.bridge, "Received replay request for \(payload.url)")
@@ -233,7 +235,13 @@ public final class DebugBridgeClient: NSObject {
             
         case let .breakpointResume(payload):
             DebugLog.info(.bridge, "Received breakpoint resume for \(payload.requestId)")
-            // TODO: 实现断点恢复功能
+            // 恢复断点
+            Task {
+                await BreakpointEngine.shared.resumeBreakpoint(
+                    requestId: payload.requestId,
+                    action: mapBreakpointAction(payload)
+                )
+            }
 
         case let .error(code, errorMessage):
             let error = NSError(domain: "DebugBridge", code: code, userInfo: [NSLocalizedDescriptionKey: errorMessage])
@@ -281,6 +289,29 @@ public final class DebugBridgeClient: NSObject {
             // 可选：发送重放结果回服务端
             // self?.sendReplayResult(id: payload.id, response: response, data: data, error: error)
         }.resume()
+    }
+    
+    /// 将 BreakpointResumePayload 转换为 BreakpointAction
+    private func mapBreakpointAction(_ payload: BreakpointResumePayload) -> BreakpointAction {
+        switch payload.action.lowercased() {
+        case "continue", "resume":
+            return .resume
+        case "abort":
+            return .abort
+        case "modify":
+            if let mod = payload.modifiedRequest {
+                let request = BreakpointRequestSnapshot(
+                    method: mod.method ?? "GET",
+                    url: mod.url ?? "",
+                    headers: mod.headers ?? [:],
+                    body: mod.body
+                )
+                return .modify(BreakpointModification(request: request, response: nil))
+            }
+            return .resume
+        default:
+            return .resume
+        }
     }
 
     private func handleError(_ error: Error) {

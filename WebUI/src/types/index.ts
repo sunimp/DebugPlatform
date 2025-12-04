@@ -17,6 +17,7 @@ export interface DeviceListItem {
   deviceName: string
   appName: string
   appVersion: string
+  buildNumber: string
   platform: string
   systemVersion: string
   isOnline: boolean
@@ -224,6 +225,7 @@ export type RealtimeMessageType =
   | 'stats'
   | 'deviceConnected'
   | 'deviceDisconnected'
+  | 'breakpointHit'
 
 export interface RealtimeMessage {
   type: RealtimeMessageType

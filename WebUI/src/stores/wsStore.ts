@@ -1,6 +1,6 @@
 import { create } from 'zustand'
 import type { WSSessionSummary, WSSessionDetail, WSFrame } from '@/types'
-import { getWSSessions, getWSSessionDetail, getWSFrames, type WSSessionFilters } from '@/services/api'
+import { getWSSessions, getWSSessionDetail, getWSFrames, batchDeleteWSSessions, type WSSessionFilters } from '@/services/api'
 
 interface WSStore {
   // 会话列表
@@ -29,6 +29,10 @@ interface WSStore {
   // 自动滚动
   autoScroll: boolean
 
+  // 批量选择
+  isSelectMode: boolean
+  selectedIds: Set<string>
+
   // Actions
   fetchSessions: (deviceId: string) => Promise<void>
   selectSession: (deviceId: string, sessionId: string) => Promise<void>
@@ -43,6 +47,13 @@ interface WSStore {
   updateSessionStatus: (sessionId: string, isOpen: boolean, closeCode?: number, closeReason?: string) => void
   updateSessionUrl: (sessionId: string, url: string) => void
   addRealtimeFrame: (frame: WSFrame) => void
+
+  // 批量操作
+  toggleSelectMode: () => void
+  toggleSelectId: (id: string) => void
+  selectAll: () => void
+  clearSelectedIds: () => void
+  batchDelete: (deviceId: string) => Promise<void>
 }
 
 export const useWSStore = create<WSStore>((set, get) => ({
@@ -71,6 +82,9 @@ export const useWSStore = create<WSStore>((set, get) => ({
 
   autoScroll: true,
 
+  isSelectMode: false,
+  selectedIds: new Set(),
+
   // Actions
   fetchSessions: async (deviceId: string) => {
     set({ sessionsLoading: true, sessionsError: null })
@@ -82,6 +96,7 @@ export const useWSStore = create<WSStore>((set, get) => ({
         sessionsLoading: false,
       })
     } catch (error) {
+      console.error('[wsStore] fetchSessions error:', error)
       set({
         sessionsLoading: false,
         sessionsError: error instanceof Error ? error.message : '加载失败',
@@ -179,10 +194,16 @@ export const useWSStore = create<WSStore>((set, get) => ({
   },
 
   addRealtimeSession: (session: WSSessionSummary) => {
-    set((state) => ({
-      sessions: [session, ...state.sessions],
-      totalSessions: state.totalSessions + 1,
-    }))
+    set((state) => {
+      // 检查是否已存在（避免重复）
+      if (state.sessions.some((s) => s.id === session.id)) {
+        return state
+      }
+      return {
+        sessions: [session, ...state.sessions],
+        totalSessions: state.totalSessions + 1,
+      }
+    })
   },
 
   updateSessionStatus: (sessionId: string, isOpen: boolean, closeCode?: number, closeReason?: string) => {
@@ -215,6 +236,57 @@ export const useWSStore = create<WSStore>((set, get) => ({
         frames: [...state.frames, frame],
         totalFrames: state.totalFrames + 1,
       }))
+    }
+  },
+
+  // 批量选择操作
+  toggleSelectMode: () => {
+    set((state) => ({
+      isSelectMode: !state.isSelectMode,
+      selectedIds: state.isSelectMode ? new Set() : state.selectedIds,
+    }))
+  },
+
+  toggleSelectId: (id: string) => {
+    set((state) => {
+      const newSelectedIds = new Set(state.selectedIds)
+      if (newSelectedIds.has(id)) {
+        newSelectedIds.delete(id)
+      } else {
+        newSelectedIds.add(id)
+      }
+      return { selectedIds: newSelectedIds }
+    })
+  },
+
+  selectAll: () => {
+    set((state) => {
+      const allIds = new Set(state.sessions.map((s) => s.id))
+      const allSelected = state.selectedIds.size === state.sessions.length
+      return { selectedIds: allSelected ? new Set() : allIds }
+    })
+  },
+
+  clearSelectedIds: () => {
+    set({ selectedIds: new Set() })
+  },
+
+  batchDelete: async (deviceId: string) => {
+    const { selectedIds, sessions } = get()
+    if (selectedIds.size === 0) return
+
+    try {
+      await batchDeleteWSSessions(deviceId, Array.from(selectedIds))
+      set({
+        sessions: sessions.filter((s) => !selectedIds.has(s.id)),
+        selectedIds: new Set(),
+        totalSessions: get().totalSessions - selectedIds.size,
+        // 如果删除了当前选中的会话，清除选中状态
+        selectedSessionId: selectedIds.has(get().selectedSessionId ?? '') ? null : get().selectedSessionId,
+        selectedSession: selectedIds.has(get().selectedSessionId ?? '') ? null : get().selectedSession,
+      })
+    } catch (error) {
+      console.error('Failed to batch delete WS sessions:', error)
     }
   },
 }))

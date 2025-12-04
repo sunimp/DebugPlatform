@@ -233,7 +233,7 @@ public final class CaptureURLProtocol: URLProtocol {
         requestId = UUID().uuidString
         traceId = request.value(forHTTPHeaderField: "X-Trace-Id")
 
-        // 处理 Mock 规则
+        // 1. 处理 Mock 规则
         let (modifiedRequest, mockResponse, ruleId) = MockRuleEngine.shared.processHTTPRequest(request)
         mockRuleId = ruleId
 
@@ -244,9 +244,96 @@ public final class CaptureURLProtocol: URLProtocol {
             return
         }
 
+        // 2. 处理故障注入 (Chaos)
+        let chaosResult = ChaosEngine.shared.evaluate(request: modifiedRequest)
+        switch chaosResult {
+        case .none:
+            break
+        case let .delay(milliseconds):
+            // 延迟后继续
+            DispatchQueue.global().asyncAfter(deadline: .now() + .milliseconds(milliseconds)) { [weak self] in
+                self?.proceedWithRequest(modifiedRequest)
+            }
+            return
+        case .timeout:
+            // 模拟超时
+            let error = NSError(domain: NSURLErrorDomain, code: NSURLErrorTimedOut, userInfo: nil)
+            client?.urlProtocol(self, didFailWithError: error)
+            recordHTTPEvent(request: modifiedRequest, response: nil, data: nil, error: error, duration: 0)
+            return
+        case .connectionReset:
+            // 模拟连接重置
+            let error = NSError(domain: NSURLErrorDomain, code: NSURLErrorNetworkConnectionLost, userInfo: nil)
+            client?.urlProtocol(self, didFailWithError: error)
+            recordHTTPEvent(request: modifiedRequest, response: nil, data: nil, error: error, duration: 0)
+            return
+        case let .errorResponse(statusCode):
+            // 返回指定状态码的响应
+            let response = HTTPEvent.Response(
+                statusCode: statusCode,
+                headers: [:],
+                body: "Chaos injected status code: \(statusCode)".data(using: .utf8),
+                endTime: Date(),
+                duration: 0,
+                errorDescription: nil
+            )
+            handleMockResponse(response, for: modifiedRequest)
+            return
+        case let .corruptedData(data):
+            // 返回损坏的数据
+            let response = HTTPEvent.Response(
+                statusCode: 200,
+                headers: [:],
+                body: data,
+                endTime: Date(),
+                duration: 0,
+                errorDescription: nil
+            )
+            handleMockResponse(response, for: modifiedRequest)
+            return
+        case .drop:
+            // 丢弃请求，不响应
+            return
+        }
+
+        // 3. 处理断点 (异步)
+        if BreakpointEngine.shared.isEnabled {
+            Task { @MainActor [weak self] in
+                guard let self = self else { return }
+                let result = await BreakpointEngine.shared.checkRequestBreakpoint(
+                    requestId: self.requestId,
+                    request: modifiedRequest
+                )
+                switch result {
+                case let .proceed(finalRequest):
+                    self.proceedWithRequest(finalRequest)
+                case .abort:
+                    let error = NSError(domain: "DebugProbe", code: -1, userInfo: [NSLocalizedDescriptionKey: "Request aborted by breakpoint"])
+                    self.client?.urlProtocol(self, didFailWithError: error)
+                    self.recordHTTPEvent(request: modifiedRequest, response: nil, data: nil, error: error, duration: 0)
+                case let .mockResponse(snapshot):
+                    let response = HTTPEvent.Response(
+                        statusCode: snapshot.statusCode,
+                        headers: snapshot.headers,
+                        body: snapshot.body,
+                        endTime: Date(),
+                        duration: Date().timeIntervalSince(self.startTime),
+                        errorDescription: nil
+                    )
+                    self.handleMockResponse(response, for: modifiedRequest)
+                }
+            }
+            return
+        }
+
+        // 正常流程
+        proceedWithRequest(modifiedRequest)
+    }
+    
+    /// 实际发送请求
+    private func proceedWithRequest(_ request: URLRequest) {
         // 标记请求已处理，防止循环拦截
-        // URLProtocol.setProperty 需要 NSMutableURLRequest
-        guard let mutableRequest = (modifiedRequest as NSURLRequest).mutableCopy() as? NSMutableURLRequest else {
+        guard let mutableRequest = (request as NSURLRequest).mutableCopy() as? NSMutableURLRequest else {
             return
         }
         URLProtocol.setProperty(true, forKey: Self.handledKey, in: mutableRequest)

@@ -37,32 +37,32 @@ export function formatRelativeTime(dateString: string): string {
     if (diffSeconds < 5) {
       return '刚刚'
     }
-    
+
     // 小于 1 分钟
     if (diffSeconds < 60) {
       return `${diffSeconds} 秒前`
     }
-    
+
     // 小于 1 小时
     if (diffMinutes < 60) {
       return `${diffMinutes} 分钟前`
     }
-    
+
     // 小于 24 小时
     if (diffHours < 24) {
       return `${diffHours} 小时前`
     }
-    
+
     // 今天
     if (isToday(date)) {
       return `今天 ${format(date, 'HH:mm')}`
     }
-    
+
     // 昨天
     if (isYesterday(date)) {
       return `昨天 ${format(date, 'HH:mm')}`
     }
-    
+
     // 更早的日期
     return format(date, 'MM-dd HH:mm')
   } catch {
@@ -103,18 +103,6 @@ export function formatSmartTime(dateString: string): string {
 }
 
 /**
- * 格式化持续时间
- */
-export function formatDuration(ms: number | null): string {
-  if (ms === null || ms === undefined) return '-'
-  const msValue = ms * 1000 // API returns seconds
-  if (msValue < 1) return '<1ms'
-  if (msValue < 1000) return `${msValue.toFixed(0)}ms`
-  if (msValue < 10000) return `${(msValue / 1000).toFixed(2)}s`
-  return `${(msValue / 1000).toFixed(1)}s`
-}
-
-/**
  * 格式化持续时间（带颜色类名）
  */
 export function getDurationClass(ms: number | null): string {
@@ -125,6 +113,41 @@ export function getDurationClass(ms: number | null): string {
   if (msValue < 1000) return 'text-yellow-400'
   if (msValue < 3000) return 'text-orange-400'
   return 'text-red-400'
+}
+
+/**
+ * 格式化持续时间
+ * 支持两种调用方式：
+ * - formatDuration(ms: number) - 毫秒数
+ * - formatDuration(start: Date, end: Date) - 两个时间点
+ */
+export function formatDuration(start: Date, end: Date): string
+export function formatDuration(ms: number | null): string
+export function formatDuration(startOrMs: Date | number | null, end?: Date): string {
+  let diffMs: number
+
+  if (startOrMs instanceof Date && end instanceof Date) {
+    diffMs = end.getTime() - startOrMs.getTime()
+  } else if (typeof startOrMs === 'number') {
+    if (startOrMs === null) return '-'
+    diffMs = startOrMs * 1000 // API returns seconds
+  } else {
+    return '-'
+  }
+
+  if (diffMs < 0) return '-'
+  // 毫秒和微秒不显示小数
+  if (diffMs < 1) return `${Math.round(diffMs * 1000)}µs`
+  if (diffMs < 1000) return `${Math.round(diffMs)}ms`
+  if (diffMs < 60000) return `${(diffMs / 1000).toFixed(1)}s`
+  if (diffMs < 3600000) {
+    const mins = Math.floor(diffMs / 60000)
+    const secs = Math.floor((diffMs % 60000) / 1000)
+    return `${mins}m ${secs}s`
+  }
+  const hours = Math.floor(diffMs / 3600000)
+  const mins = Math.floor((diffMs % 3600000) / 60000)
+  return `${hours}h ${mins}m`
 }
 
 /**

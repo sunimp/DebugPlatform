@@ -1,6 +1,6 @@
-import { useEffect, useRef } from 'react'
+import { useEffect, useRef, memo } from 'react'
 import type { WSSessionSummary } from '@/types'
-import { formatSmartTime, extractDomain } from '@/utils/format'
+import { formatSmartTime, extractDomain, formatDuration } from '@/utils/format'
 import clsx from 'clsx'
 
 interface WSSessionListProps {
@@ -9,6 +9,10 @@ interface WSSessionListProps {
   onSelect: (sessionId: string) => void
   loading?: boolean
   autoScroll?: boolean
+  // 批量选择相关
+  isSelectMode?: boolean
+  selectedIds?: Set<string>
+  onToggleSelect?: (id: string) => void
 }
 
 export function WSSessionList({
@@ -17,11 +21,14 @@ export function WSSessionList({
   onSelect,
   loading,
   autoScroll,
+  isSelectMode = false,
+  selectedIds = new Set(),
+  onToggleSelect,
 }: WSSessionListProps) {
   const containerRef = useRef<HTMLDivElement>(null)
   const prevFirstIdRef = useRef<string | null>(null)
 
-  // 自动滚动逻辑
+  // 自动滚动逻辑：新会话到达时滚动到顶部
   useEffect(() => {
     if (!autoScroll || sessions.length === 0) return
 
@@ -44,52 +51,18 @@ export function WSSessionList({
 
   return (
     <div ref={containerRef} className="overflow-auto h-full">
-      {/* 表头 */}
-      <div className="sticky top-0 z-10 bg-bg-dark/95 backdrop-blur-sm border-b border-border">
-        <div className="grid grid-cols-[1fr_120px_100px] gap-2 px-4 py-2 text-xs font-medium text-text-muted uppercase tracking-wider">
-          <span>URL</span>
-          <span>连接时间</span>
-          <span>状态</span>
-        </div>
-      </div>
-
       {/* 会话列表 */}
       <div className="divide-y divide-border/50">
         {sessions.map((session) => (
-          <div
+          <SessionItem
             key={session.id}
-            onClick={() => onSelect(session.id)}
-            className={clsx(
-              'grid grid-cols-[1fr_120px_100px] gap-2 px-4 py-3 cursor-pointer transition-all',
-              'hover:bg-bg-light/50',
-              selectedId === session.id
-                ? 'bg-primary/10 border-l-2 border-l-primary'
-                : 'border-l-2 border-l-transparent'
-            )}
-          >
-            {/* URL */}
-            <div className="min-w-0">
-              <div className="flex items-center gap-2 mb-1">
-                <span className="text-lg">🔌</span>
-                <span className="font-mono text-sm text-text-primary truncate">
-                  {extractDomain(session.url)}
-                </span>
-              </div>
-              <div className="text-xs text-text-muted truncate font-mono">
-                {session.url}
-              </div>
-            </div>
-
-            {/* 连接时间 */}
-            <div className="text-xs text-text-secondary self-center">
-              {formatSmartTime(session.connectTime)}
-            </div>
-
-            {/* 状态 */}
-            <div className="self-center">
-              <StatusBadge session={session} />
-            </div>
-          </div>
+            session={session}
+            isSelected={selectedId === session.id}
+            isChecked={selectedIds.has(session.id)}
+            isSelectMode={isSelectMode}
+            onSelect={onSelect}
+            onToggleSelect={onToggleSelect}
+          />
         ))}
       </div>
 
@@ -103,22 +76,103 @@ export function WSSessionList({
   )
 }
 
-function StatusBadge({ session }: { session: WSSessionSummary }) {
-  if (session.isOpen) {
-    return (
-      <span className="inline-flex items-center gap-1.5 px-2 py-1 text-xs font-medium rounded-full bg-green-500/10 text-green-400 border border-green-500/20">
-        <span className="w-1.5 h-1.5 rounded-full bg-green-400 animate-pulse" />
-        连接中
-      </span>
-    )
+// 使用 memo 优化会话项渲染
+const SessionItem = memo(function SessionItem({
+  session,
+  isSelected,
+  isChecked,
+  isSelectMode,
+  onSelect,
+  onToggleSelect,
+}: {
+  session: WSSessionSummary
+  isSelected: boolean
+  isChecked: boolean
+  isSelectMode: boolean
+  onSelect: (sessionId: string) => void
+  onToggleSelect?: (id: string) => void
+}) {
+  const duration = session.disconnectTime
+    ? formatDuration(new Date(session.connectTime), new Date(session.disconnectTime))
+    : null
+
+  const handleClick = () => {
+    if (isSelectMode && onToggleSelect) {
+      onToggleSelect(session.id)
+    } else {
+      onSelect(session.id)
+    }
   }
 
-  const closeCodeText = session.closeCode ? ` (${session.closeCode})` : ''
-
   return (
-    <span className="inline-flex items-center gap-1.5 px-2 py-1 text-xs font-medium rounded-full bg-text-muted/10 text-text-muted border border-border">
-      <span className="w-1.5 h-1.5 rounded-full bg-text-muted" />
-      已关闭{closeCodeText}
-    </span>
+    <div
+      onClick={handleClick}
+      className={clsx(
+        'px-4 py-3 cursor-pointer transition-all',
+        'hover:bg-bg-light/50',
+        isSelected && !isSelectMode
+          ? 'bg-primary/10 border-l-2 border-l-primary'
+          : 'border-l-2 border-l-transparent',
+        isSelectMode && isChecked && 'bg-primary/10'
+      )}
+    >
+      {/* 第一行：选择框/状态、域名、时间 */}
+      <div className="flex items-center gap-2 mb-1">
+        {isSelectMode ? (
+          <input
+            type="checkbox"
+            checked={isChecked}
+            onChange={() => onToggleSelect?.(session.id)}
+            onClick={(e) => e.stopPropagation()}
+            className="w-4 h-4 rounded border-border bg-bg-light text-primary focus:ring-primary/50 cursor-pointer"
+          />
+        ) : (
+          <StatusIndicator isOpen={session.isOpen} />
+        )}
+        <span className="font-mono text-sm text-text-primary truncate flex-1">
+          {extractDomain(session.url)}
+        </span>
+        <span className="text-xs text-text-muted">
+          {formatSmartTime(session.connectTime)}
+        </span>
+      </div>
+
+      {/* 第二行：完整 URL */}
+      <div className="text-xs text-text-muted truncate font-mono ml-5">
+        {session.url}
+      </div>
+
+      {/* 第三行：状态信息 */}
+      <div className="flex items-center gap-3 mt-1.5 ml-5">
+        {session.isOpen ? (
+          <span className="inline-flex items-center gap-1 text-xs text-green-400">
+            <span className="w-1.5 h-1.5 rounded-full bg-green-400 animate-pulse" />
+            连接中
+          </span>
+        ) : (
+          <>
+            <span className="text-xs text-text-muted">
+              已关闭{session.closeCode ? ` (${session.closeCode})` : ''}
+            </span>
+            {duration && (
+              <span className="text-xs text-text-muted">
+                持续 {duration}
+              </span>
+            )}
+          </>
+        )}
+      </div>
+    </div>
+  )
+})
+
+function StatusIndicator({ isOpen }: { isOpen: boolean }) {
+  return (
+    <span
+      className={clsx(
+        'w-3 h-3 rounded-full flex-shrink-0',
+        isOpen ? 'bg-green-500 shadow-green-500/50 shadow-sm' : 'bg-gray-500'
+      )}
+    />
   )
 }

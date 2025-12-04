@@ -55,8 +55,8 @@ export function TimingWaterfall({ timing, totalDuration }: TimingWaterfallProps)
   const formatMs = (seconds: number | null): string => {
     if (seconds === null || seconds === undefined) return '-'
     const ms = seconds * 1000
-    if (ms < 1) return `${(ms * 1000).toFixed(0)}µs`
-    if (ms < 1000) return `${ms.toFixed(1)}ms`
+    if (ms < 1) return `${Math.round(ms * 1000)}µs`
+    if (ms < 1000) return `${Math.round(ms)}ms`
     return `${(ms / 1000).toFixed(2)}s`
   }
 
@@ -174,12 +174,14 @@ export function TimingBar({ timing, totalDuration }: TimingWaterfallProps) {
       {segments.map((segment, i) => {
         if (segment.value === null) return null
         const percentage = (segment.value / total) * 100
+        const ms = segment.value * 1000
+        const msFormatted = ms < 1 ? `${Math.round(ms * 1000)}µs` : `${Math.round(ms)}ms`
         return (
           <div
             key={i}
             className={`${segment.color} transition-all duration-300`}
             style={{ width: `${percentage}%` }}
-            title={`${(segment.value * 1000).toFixed(1)}ms`}
+            title={msFormatted}
           />
         )
       })}

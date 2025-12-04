@@ -5,6 +5,7 @@
 // Copyright © 2025 Sun. All rights reserved.
 //
 
+import Fluent
 import Foundation
 import Vapor
 
@@ -77,7 +78,7 @@ final class DebugBridgeHandler: @unchecked Sendable {
             switch message {
             case let .register(deviceInfo, token):
                 print("[DebugBridge] Received register message from \(deviceInfo.deviceName)")
-                handleRegister(deviceInfo: deviceInfo, token: token, ws: ws, deviceIdHolder: deviceIdHolder)
+                handleRegister(deviceInfo: deviceInfo, token: token, ws: ws, deviceIdHolder: deviceIdHolder, req: req)
 
             case .heartbeat:
                 print("[DebugBridge] Received heartbeat from \(deviceIdHolder.deviceId ?? "unknown")")
@@ -99,6 +100,12 @@ final class DebugBridgeHandler: @unchecked Sendable {
                     handleEvents(events: events, deviceId: deviceId, req: req)
                 }
 
+            case let .breakpointHit(hit):
+                if let deviceId = deviceIdHolder.deviceId {
+                    print("[DebugBridge] Received breakpoint hit from \(deviceId): requestId=\(hit.requestId)")
+                    handleBreakpointHit(hit: hit, deviceId: deviceId)
+                }
+
             default:
                 print("[DebugBridge] Received unknown message type")
             }
@@ -113,7 +120,8 @@ final class DebugBridgeHandler: @unchecked Sendable {
         deviceInfo: DeviceInfoDTO,
         token: String,
         ws: WebSocket,
-        deviceIdHolder: DeviceIdHolder
+        deviceIdHolder: DeviceIdHolder,
+        req: Request
     ) {
         // 验证 token
         guard token == validToken else {
@@ -142,9 +150,9 @@ final class DebugBridgeHandler: @unchecked Sendable {
             sessionId: sessionId
         )
 
-        // 发送当前的 Mock 规则
+        // 发送当前的规则
         Task {
-            await sendCurrentMockRules(to: deviceInfo.deviceId, session: session)
+            await sendCurrentRules(to: deviceInfo.deviceId, session: session, db: req.db)
         }
     }
 
@@ -167,6 +175,14 @@ final class DebugBridgeHandler: @unchecked Sendable {
         }
     }
 
+    private func handleBreakpointHit(hit: BreakpointHitDTO, deviceId: String) {
+        // 添加到 pending hits
+        BreakpointManager.shared.addPendingHit(hit)
+        
+        // 广播给 WebUI
+        RealtimeStreamHandler.shared.broadcastBreakpointHit(hit, deviceId: deviceId)
+    }
+
     private func handleDisconnect(deviceId: String) {
         // 注销设备（DeviceRegistry 会处理延迟断开逻辑）
         DeviceRegistry.shared.unregister(deviceId: deviceId)
@@ -174,8 +190,72 @@ final class DebugBridgeHandler: @unchecked Sendable {
         // 注意：断开事件由 DeviceRegistry 的延迟机制广播，不在这里直接广播
     }
 
-    private func sendCurrentMockRules(to deviceId: String, session _: DeviceSession) async {
-        // TODO: 从数据库加载该设备的 Mock 规则并发送
+    private func sendCurrentRules(to deviceId: String, session: DeviceSession, db: Database) async {
+        // 发送 Mock 规则
+        let mockRules = await loadMockRules(deviceId: deviceId, db: db)
+        if !mockRules.isEmpty {
+            let message = BridgeMessageDTO.updateMockRules(mockRules)
+            sendMessage(ws: session.webSocket, message: message)
+            print("[DebugBridge] Sent \(mockRules.count) mock rules to \(deviceId)")
+        }
+
+        // 发送断点规则
+        let breakpointRules = await loadBreakpointRules(deviceId: deviceId, db: db)
+        if !breakpointRules.isEmpty {
+            let message = BridgeMessageDTO.updateBreakpointRules(breakpointRules)
+            sendMessage(ws: session.webSocket, message: message)
+            print("[DebugBridge] Sent \(breakpointRules.count) breakpoint rules to \(deviceId)")
+        }
+
+        // 发送混沌规则
+        let chaosRules = await loadChaosRules(deviceId: deviceId, db: db)
+        if !chaosRules.isEmpty {
+            let message = BridgeMessageDTO.updateChaosRules(chaosRules)
+            sendMessage(ws: session.webSocket, message: message)
+            print("[DebugBridge] Sent \(chaosRules.count) chaos rules to \(deviceId)")
+        }
+    }
+
+    private func loadMockRules(deviceId: String, db: Database) async -> [MockRuleDTO] {
+        do {
+            let rules = try await MockRuleModel.query(on: db)
+                .filter(\.$deviceId == deviceId)
+                .filter(\.$enabled == true)
+                .sort(\.$priority, .descending)
+                .all()
+            return rules.map { $0.toDTO() }
+        } catch {
+            print("[DebugBridge] Failed to load mock rules: \(error)")
+            return []
+        }
+    }
+
+    private func loadBreakpointRules(deviceId: String, db: Database) async -> [BreakpointRuleDTO] {
+        do {
+            let rules = try await BreakpointRuleModel.query(on: db)
+                .filter(\.$deviceId == deviceId)
+                .filter(\.$enabled == true)
+                .sort(\.$priority, .descending)
+                .all()
+            return rules.map { $0.toDTO() }
+        } catch {
+            print("[DebugBridge] Failed to load breakpoint rules: \(error)")
+            return []
+        }
+    }
+
+    private func loadChaosRules(deviceId: String, db: Database) async -> [ChaosRuleDTO] {
+        do {
+            let rules = try await ChaosRuleModel.query(on: db)
+                .filter(\.$deviceId == deviceId)
+                .filter(\.$enabled == true)
+                .sort(\.$priority, .descending)
+                .all()
+            return rules.map { $0.toDTO() }
+        } catch {
+            print("[DebugBridge] Failed to load chaos rules: \(error)")
+            return []
+        }
     }
 
     // MARK: - Public API

@@ -40,8 +40,9 @@ export function HTTPEventDetail({
 
   if (!event) {
     return (
-      <div className="flex items-center justify-center h-full text-text-muted">
-        选择一个请求查看详情
+      <div className="flex flex-col items-center justify-center h-full text-text-muted">
+        <span className="text-4xl mb-3 opacity-50">👈</span>
+        <p className="text-sm">选择一个请求查看详情</p>
       </div>
     )
   }
@@ -222,14 +223,14 @@ export function HTTPEventDetail({
 
         {activeTab === 'params' && (
           <div className="space-y-6">
-             <Section title="Query Params">
-               <HeadersTable headers={event.queryItems || {}} />
-             </Section>
+            <Section title="Query Params">
+              <HeadersTable headers={event.queryItems || {}} />
+            </Section>
 
-             <Section title="Body Params">
-               <HeadersTable headers={event.bodyParams || {}} />
-               {!event.bodyParams && <div className="text-text-muted text-sm">无解析后的 Body 参数</div>}
-              </Section>
+            <Section title="Body Params">
+              <HeadersTable headers={event.bodyParams || {}} />
+              {!event.bodyParams && <div className="text-text-muted text-sm">无解析后的 Body 参数</div>}
+            </Section>
           </div>
         )}
 

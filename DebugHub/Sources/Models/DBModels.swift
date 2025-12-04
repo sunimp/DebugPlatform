@@ -536,4 +536,22 @@ final class MockRuleModel: Model, Content, @unchecked Sendable {
         self.priority = priority
         self.enabled = enabled
     }
+
+    func toDTO() -> MockRuleDTO {
+        let decoder = JSONDecoder()
+        let condition = (try? decoder.decode(MockRuleDTO.Condition.self, from: Data(conditionJSON.utf8)))
+            ?? MockRuleDTO.Condition()
+        let action = (try? decoder.decode(MockRuleDTO.Action.self, from: Data(actionJSON.utf8)))
+            ?? MockRuleDTO.Action()
+
+        return MockRuleDTO(
+            id: id!,
+            name: name,
+            targetType: targetType,
+            condition: condition,
+            action: action,
+            priority: priority,
+            enabled: enabled
+        )
+    }
 }

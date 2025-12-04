@@ -1,4 +1,4 @@
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap');
+/* Google Fonts is loaded asynchronously in index.html to avoid blocking render */
 
 @tailwind base;
 @tailwind components;
@@ -55,9 +55,9 @@
   --shadow-lg: 0 4px 8px rgba(0, 0, 0, 0.2);
   --shadow-glow: none;
 
-  /* Font - Clean system fonts */
-  --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-  --font-mono: 'JetBrains Mono', 'SF Mono', Monaco, Consolas, monospace;
+  /* Font - System fonts with Inter/JetBrains as optional enhancement */
+  --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', sans-serif;
+  --font-mono: 'JetBrains Mono', 'SF Mono', Monaco, Consolas, 'Liberation Mono', monospace;
 }
 
 .light {

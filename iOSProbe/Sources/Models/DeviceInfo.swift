@@ -59,9 +59,9 @@ public struct DeviceInfo: Codable {
                 deviceName: device.name,
                 systemName: device.systemName,
                 systemVersion: device.systemVersion,
-                appName: bundle.infoDictionary?["CFBundleName"] as? String ?? "Unknown",
+                appName: bundle.infoDictionary?["CFBundleDisplayName"] as? String ?? bundle.infoDictionary?["CFBundleName"] as? String ?? "Unknown",
                 appVersion: bundle.infoDictionary?["CFBundleShortVersionString"] as? String ?? "0.0.0",
-                buildNumber: bundle.infoDictionary?["CFBundleVersion"] as? String ?? "0",
+                buildNumber: bundle.infoDictionary?[kCFBundleVersionKey as String] as? String ?? "0",
                 platform: "iOS"
             )
         }

@@ -1,6 +1,6 @@
-import { useState, useCallback } from 'react'
+import { useState, useCallback, useRef, useEffect, memo } from 'react'
 import type { WSSessionDetail as WSSessionDetailType, WSFrame, WSFrameDetail } from '@/types'
-import { formatSmartTime } from '@/utils/format'
+import { formatSmartTime, formatBytes } from '@/utils/format'
 import { JSONTree } from './JSONTree'
 import { getWSFrameDetail } from '@/services/api'
 import clsx from 'clsx'
@@ -147,24 +147,84 @@ function FramesTab({
   direction: string
   onDirectionChange: (direction: string) => void
 }) {
+  const listRef = useRef<HTMLDivElement>(null)
+  const [autoScroll, setAutoScroll] = useState(true)
+  const prevFrameCountRef = useRef(frames.length)
+
+  // 自动滚动到底部（新帧到达时）
+  useEffect(() => {
+    if (!autoScroll || !listRef.current) return
+
+    // 只在新帧到达时滚动
+    if (frames.length > prevFrameCountRef.current) {
+      listRef.current.scrollTop = listRef.current.scrollHeight
+    }
+    prevFrameCountRef.current = frames.length
+  }, [frames.length, autoScroll])
+
+  // 统计发送/接收帧数
+  const sendCount = frames.filter(f => f.direction === 'send').length
+  const receiveCount = frames.filter(f => f.direction === 'receive').length
+  const totalSize = frames.reduce((sum, f) => sum + (f.payloadSize || 0), 0)
+
   return (
     <div className="flex flex-col h-full">
-      {/* 筛选栏 */}
-      <div className="px-4 py-2 border-b border-border/50 flex items-center gap-3">
-        <select
-          value={direction}
-          onChange={(e) => onDirectionChange(e.target.value)}
-          className="select text-xs"
-        >
-          <option value="">全部方向</option>
-          <option value="send">发送 ↑</option>
-          <option value="receive">接收 ↓</option>
-        </select>
-        <span className="text-xs text-text-muted">{frames.length} 条消息</span>
+      {/* 工具栏 */}
+      <div className="px-4 py-2 border-b border-border/50 flex items-center justify-between gap-3 bg-bg-dark/30">
+        <div className="flex items-center gap-3">
+          {/* 方向筛选 */}
+          <div className="flex items-center gap-1 bg-bg-light/50 rounded-lg p-1">
+            <button
+              onClick={() => onDirectionChange('')}
+              className={clsx(
+                'px-2 py-1 text-xs rounded transition-colors',
+                !direction ? 'bg-bg-dark text-text-primary' : 'text-text-muted hover:text-text-primary'
+              )}
+            >
+              全部
+            </button>
+            <button
+              onClick={() => onDirectionChange('send')}
+              className={clsx(
+                'px-2 py-1 text-xs rounded transition-colors flex items-center gap-1',
+                direction === 'send' ? 'bg-blue-500/20 text-blue-400' : 'text-text-muted hover:text-blue-400'
+              )}
+            >
+              <span>↑</span> 发送
+            </button>
+            <button
+              onClick={() => onDirectionChange('receive')}
+              className={clsx(
+                'px-2 py-1 text-xs rounded transition-colors flex items-center gap-1',
+                direction === 'receive' ? 'bg-green-500/20 text-green-400' : 'text-text-muted hover:text-green-400'
+              )}
+            >
+              <span>↓</span> 接收
+            </button>
+          </div>
+
+          {/* 统计信息 */}
+          <div className="flex items-center gap-2 text-xs text-text-muted">
+            <span className="text-blue-400">↑{sendCount}</span>
+            <span className="text-green-400">↓{receiveCount}</span>
+            <span>• {formatBytes(totalSize)}</span>
+          </div>
+        </div>
+
+        {/* 自动滚动开关 */}
+        <label className="flex items-center gap-1.5 text-xs text-text-muted cursor-pointer hover:text-text-primary transition-colors">
+          <input
+            type="checkbox"
+            checked={autoScroll}
+            onChange={(e) => setAutoScroll(e.target.checked)}
+            className="accent-primary w-3 h-3"
+          />
+          自动滚动
+        </label>
       </div>
 
       {/* 帧列表 */}
-      <div className="flex-1 overflow-auto">
+      <div ref={listRef} className="flex-1 overflow-auto">
         {frames.length === 0 && !loading ? (
           <div className="flex flex-col items-center justify-center h-full text-text-muted py-8">
             <span className="text-3xl mb-2 opacity-50">📭</span>
@@ -202,7 +262,8 @@ function FramesTab({
   )
 }
 
-function FrameItem({
+// 使用 memo 优化帧项渲染
+const FrameItem = memo(function FrameItem({
   deviceId,
   sessionId,
   frame,
@@ -326,7 +387,9 @@ function FrameItem({
       className={clsx(
         'px-4 py-2 cursor-pointer transition-all',
         'hover:bg-bg-light/30',
-        isExpanded && 'bg-bg-light/50'
+        isExpanded && 'bg-bg-light/50',
+        // 添加方向指示的边框颜色
+        isSend ? 'border-l-2 border-l-blue-500/50' : 'border-l-2 border-l-green-500/50'
       )}
       onClick={handleToggle}
     >
@@ -335,7 +398,7 @@ function FrameItem({
         {/* 方向图标 */}
         <span
           className={clsx(
-            'w-6 h-6 rounded-full flex items-center justify-center text-xs',
+            'w-7 h-7 rounded-lg flex items-center justify-center text-sm font-medium',
             isSend ? 'bg-blue-500/20 text-blue-400' : 'bg-green-500/20 text-green-400'
           )}
         >
@@ -345,8 +408,15 @@ function FrameItem({
         {/* 预览 */}
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2">
-            <span className="text-xs text-text-muted font-mono uppercase">{frame.opcode}</span>
-            <span className="text-xs text-text-muted">{frame.payloadSize} bytes</span>
+            <span
+              className={clsx(
+                'text-xs font-mono uppercase px-1.5 py-0.5 rounded',
+                frame.opcode === 'text' ? 'bg-blue-500/10 text-blue-400' : 'bg-purple-500/10 text-purple-400'
+              )}
+            >
+              {frame.opcode}
+            </span>
+            <span className="text-xs text-text-muted">{formatBytes(frame.payloadSize)}</span>
             {frame.isMocked && (
               <span className="text-2xs px-1.5 py-0.5 bg-purple-500/20 text-purple-400 rounded">
                 MOCK
@@ -361,7 +431,7 @@ function FrameItem({
         </div>
 
         {/* 时间 */}
-        <span className="text-xs text-text-muted">{formatSmartTime(frame.timestamp)}</span>
+        <span className="text-xs text-text-muted whitespace-nowrap">{formatSmartTime(frame.timestamp)}</span>
 
         {/* 展开指示 */}
         <span className={clsx('text-xs text-text-muted transition-transform', isExpanded && 'rotate-90')}>
@@ -371,7 +441,7 @@ function FrameItem({
 
       {/* 展开内容 */}
       {isExpanded && (
-        <div className="mt-3 ml-9" onClick={(e) => e.stopPropagation()}>
+        <div className="mt-3 ml-10" onClick={(e) => e.stopPropagation()}>
           {/* 格式切换 */}
           {frameDetail && (
             <div className="flex items-center gap-2 mb-2">
@@ -397,7 +467,7 @@ function FrameItem({
       )}
     </div>
   )
-}
+})
 
 // 检测最佳显示格式
 function detectBestFormat(payloadText: string | null): PayloadFormat {

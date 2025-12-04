@@ -217,10 +217,15 @@ public final class BreakpointEngine {
     /// 恢复断点（由 Debug Hub 调用）
     public func resumeBreakpoint(_ resume: BreakpointResume) {
         Task {
-            let resumed = await pendingManager.resume(requestId: resume.requestId, action: resume.action)
-            if !resumed {
-                DebugLog.debug(.breakpoint, "No pending breakpoint for requestId: \(resume.requestId)")
-            }
+            await resumeBreakpoint(requestId: resume.requestId, action: resume.action)
+        }
+    }
+    
+    /// 恢复断点（直接调用）
+    public func resumeBreakpoint(requestId: String, action: BreakpointAction) async {
+        let resumed = await pendingManager.resume(requestId: requestId, action: action)
+        if !resumed {
+            DebugLog.debug(.breakpoint, "No pending breakpoint for requestId: \(requestId)")
         }
     }
 

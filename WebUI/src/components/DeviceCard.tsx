@@ -36,8 +36,8 @@ export function DeviceCard({ device, style }: Props) {
           <div className={clsx(
             'w-12 h-12 rounded-xl flex items-center justify-center text-2xl',
             'bg-gradient-to-br',
-            device.isOnline 
-              ? 'from-primary/20 to-accent-blue/20 border border-primary/20' 
+            device.isOnline
+              ? 'from-primary/20 to-accent-blue/20 border border-primary/20'
               : 'from-bg-light to-bg-medium border border-border'
           )}>
             {platformIcons[device.platform] || '📱'}
@@ -51,7 +51,7 @@ export function DeviceCard({ device, style }: Props) {
             </p>
           </div>
         </div>
-        
+
         {/* Status Badge */}
         <span
           className={clsx(
@@ -76,7 +76,7 @@ export function DeviceCard({ device, style }: Props) {
           </span>
         </div>
         <p className="text-xs text-text-muted pl-6">
-          版本 {device.appVersion}
+          版本 {device.appVersion} ({device.buildNumber})
         </p>
       </div>
 

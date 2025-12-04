@@ -70,6 +70,7 @@ struct DeviceController: RouteCollection {
                 deviceName: session.deviceInfo.deviceName,
                 appName: session.deviceInfo.appName,
                 appVersion: session.deviceInfo.appVersion,
+                buildNumber: session.deviceInfo.buildNumber,
                 platform: session.deviceInfo.platform,
                 systemVersion: session.deviceInfo.systemVersion,
                 isOnline: true,
@@ -194,6 +195,7 @@ struct DeviceListItemDTO: Content {
     let deviceName: String
     let appName: String
     let appVersion: String
+    let buildNumber: String
     let platform: String
     let systemVersion: String
     let isOnline: Bool

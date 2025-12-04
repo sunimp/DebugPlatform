@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from 'react'
+import { useEffect, useState, useCallback, useRef } from 'react'
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom'
 import { useDeviceStore } from '@/stores/deviceStore'
 import { useHTTPStore } from '@/stores/httpStore'
@@ -8,12 +8,12 @@ import { useMockStore } from '@/stores/mockStore'
 import { useConnectionStore } from '@/stores/connectionStore'
 import { useThemeStore } from '@/stores/themeStore'
 import { useSessionActivityStore } from '@/stores/sessionActivityStore'
+import { useBreakpointStore } from '@/stores/breakpointStore'
 import { realtimeService, parseHTTPEvent, parseLogEvent, parseWSEvent } from '@/services/realtime'
 import { HTTPEventTable } from '@/components/HTTPEventTable'
 import { HTTPEventDetail } from '@/components/HTTPEventDetail'
 import { LogList } from '@/components/LogList'
 import { LogFilters } from '@/components/LogFilters'
-import { BatchSelectionBar } from '@/components/BatchSelectionBar'
 import { KeyboardShortcutsHelp } from '@/components/KeyboardShortcutsHelp'
 import { WSSessionList } from '@/components/WSSessionList'
 import { WSSessionDetail } from '@/components/WSSessionDetail'
@@ -21,34 +21,45 @@ import { MockRuleList } from '@/components/MockRuleList'
 import { MockRuleEditor } from '@/components/MockRuleEditor'
 import { ConfirmDialog } from '@/components/ConfirmDialog'
 import { SessionActivityIndicator } from '@/components/SessionActivityIndicator'
+import { BreakpointManager } from '@/components/BreakpointManager'
+import { ChaosManager } from '@/components/ChaosManager'
 import { useKeyboardShortcuts } from '@/hooks/useKeyboardShortcuts'
-import { getExportHTTPUrl, getExportLogsUrl, getExportHARUrl } from '@/services/api'
+import { getExportHTTPUrl, getExportLogsUrl, getExportHARUrl, getWSSessionDetail } from '@/services/api'
+import type { BreakpointHit } from '@/types'
 import clsx from 'clsx'
 
-type Tab = 'http' | 'logs' | 'websocket' | 'mock'
+type Tab = 'http' | 'logs' | 'websocket' | 'mock' | 'breakpoint' | 'chaos'
 
 const tabConfig = [
   { id: 'http' as Tab, label: 'HTTP', icon: '🌐', description: 'HTTP/HTTPS 请求' },
   { id: 'websocket' as Tab, label: 'WebSocket', icon: '🔌', description: 'WS 连接' },
   { id: 'logs' as Tab, label: '日志', icon: '📝', description: '应用日志' },
   { id: 'mock' as Tab, label: 'Mock', icon: '🎭', description: '接口模拟' },
+  { id: 'breakpoint' as Tab, label: '断点', icon: '⏸️', description: '请求断点' },
+  { id: 'chaos' as Tab, label: '混沌', icon: '🎲', description: '故障注入' },
 ]
 
 export function DeviceDetailPage() {
   const { deviceId } = useParams<{ deviceId: string }>()
   const navigate = useNavigate()
-  const [searchParams] = useSearchParams()
+  const [searchParams, setSearchParams] = useSearchParams()
 
   // 从 URL 参数读取初始 tab（支持旧的 network 参数向后兼容）
   const tabParam = searchParams.get('tab')
   const initialTab = (tabParam === 'network' ? 'http' : tabParam as Tab) || 'http'
-  const [activeTab, setActiveTab] = useState<Tab>(initialTab)
+  const [activeTab, setActiveTabState] = useState<Tab>(initialTab)
   const [networkCapture, setNetworkCapture] = useState(true)
   const [logCapture, setLogCapture] = useState(true)
   const [showShortcutsHelp, setShowShortcutsHelp] = useState(false)
   const [showClearDeviceDialog, setShowClearDeviceDialog] = useState(false)
   const [showMoreMenu, setShowMoreMenu] = useState(false)
   const [showActivityPanel, setShowActivityPanel] = useState(false)
+
+  // 同时更新 state 和 URL 的 tab 切换函数
+  const setActiveTab = useCallback((tab: Tab) => {
+    setActiveTabState(tab)
+    setSearchParams({ tab }, { replace: true })
+  }, [setSearchParams])
 
   const { currentDevice, selectDevice, clearSelection, toggleCapture, clearDeviceData } =
     useDeviceStore()
@@ -67,6 +78,9 @@ export function DeviceDetailPage() {
 
   // Mock Store
   const mockStore = useMockStore()
+
+  // Breakpoint Store
+  const breakpointStore = useBreakpointStore()
 
   // 键盘快捷键
   useKeyboardShortcuts([
@@ -240,16 +254,14 @@ export function DeviceDetailPage() {
                 isOpen: true,
               })
               // 异步获取真实的 session 信息
-              import('@/services/api').then(({ getWSSessionDetail }) => {
-                getWSSessionDetail(deviceId, frame.sessionId)
-                  .then(detail => {
-                    wsStore.updateSessionUrl(frame.sessionId, detail.url)
-                  })
-                  .catch(() => {
-                    // 如果获取失败，更新为 unknown
-                    wsStore.updateSessionUrl(frame.sessionId, '(unknown)')
-                  })
-              })
+              getWSSessionDetail(deviceId, frame.sessionId)
+                .then(detail => {
+                  wsStore.updateSessionUrl(frame.sessionId, detail.url)
+                })
+                .catch(() => {
+                  // 如果获取失败，更新为 unknown
+                  wsStore.updateSessionUrl(frame.sessionId, '(unknown)')
+                })
             }
 
             // payload 是 base64 编码的字符串，计算实际字节大小
@@ -291,6 +303,14 @@ export function DeviceDetailPage() {
           })
           break
         }
+        case 'breakpointHit': {
+          // 解析断点命中事件
+          const hit = JSON.parse(message.payload) as BreakpointHit
+          breakpointStore.addHit(hit)
+          // 自动切换到断点 tab
+          setActiveTab('breakpoint')
+          break
+        }
       }
     })
 
@@ -305,6 +325,7 @@ export function DeviceDetailPage() {
       logStore.clearEvents()
       wsStore.clearSessions()
       mockStore.clearRules()
+      breakpointStore.clear()
       clearActivities()
       // 标记离开设备详情页
       setInDeviceDetail(false)
@@ -486,7 +507,7 @@ export function DeviceDetailPage() {
               key={tab.id}
               onClick={() => setActiveTab(tab.id)}
               className={clsx(
-                'flex items-center gap-2 px-5 py-2.5 rounded text-sm font-medium transition-colors',
+                'flex items-center gap-2 px-5 py-2.5 rounded text-sm font-medium transition-colors relative',
                 activeTab === tab.id
                   ? 'bg-primary text-bg-darkest'
                   : 'text-text-secondary hover:text-text-primary hover:bg-bg-light'
@@ -494,6 +515,12 @@ export function DeviceDetailPage() {
             >
               <span className="text-base">{tab.icon}</span>
               <span>{tab.label}</span>
+              {/* Breakpoint pending count badge */}
+              {tab.id === 'breakpoint' && breakpointStore.pendingHits.length > 0 && (
+                <span className="absolute -top-1 -right-1 w-5 h-5 bg-orange-500 text-white text-xs rounded-full flex items-center justify-center animate-pulse">
+                  {breakpointStore.pendingHits.length}
+                </span>
+              )}
             </button>
           ))}
         </div>
@@ -526,6 +553,18 @@ export function DeviceDetailPage() {
 
         {activeTab === 'mock' && (
           <MockTab deviceId={deviceId} mockStore={mockStore} />
+        )}
+
+        {activeTab === 'breakpoint' && (
+          <BreakpointManager
+            deviceId={deviceId}
+            pendingHits={breakpointStore.pendingHits}
+            onResumeBreakpoint={(requestId, action) => breakpointStore.resumeBreakpoint(deviceId, requestId, action)}
+          />
+        )}
+
+        {activeTab === 'chaos' && (
+          <ChaosManager deviceId={deviceId} />
         )}
       </div>
 
@@ -563,12 +602,20 @@ function HTTPTab({
   onFavoriteChange: (eventId: string, isFavorite: boolean) => void
   onRefresh: () => void
 }) {
+  // 批量删除确认对话框
+  const [showBatchDeleteConfirm, setShowBatchDeleteConfirm] = useState(false)
+
   const handleExportSelected = () => {
     const ids = Array.from(httpStore.selectedIds)
     if (ids.length > 0) {
       window.open(getExportHARUrl(deviceId, ids), '_blank')
     }
   }
+
+  const handleBatchDelete = useCallback(async () => {
+    await httpStore.batchDelete(deviceId)
+    setShowBatchDeleteConfirm(false)
+  }, [deviceId, httpStore])
 
   // 显示的记录数（过滤后）
   const filteredCount = httpStore.filteredItems.filter(
@@ -587,6 +634,55 @@ function HTTPTab({
           >
             刷新
           </button>
+
+          <div className="h-7 w-px bg-border" />
+
+          <button
+            onClick={() => httpStore.toggleSelectMode()}
+            className={clsx(
+              'btn',
+              httpStore.isSelectMode ? 'btn-primary' : 'btn-secondary'
+            )}
+            title={httpStore.isSelectMode ? '退出选择模式' : '进入选择模式'}
+          >
+            {httpStore.isSelectMode ? '取消选择' : '批量选择'}
+          </button>
+
+          {httpStore.isSelectMode && (
+            <>
+              <button
+                onClick={() => httpStore.selectAll()}
+                className="btn btn-secondary"
+                title="全选/取消全选"
+              >
+                {httpStore.selectedIds.size === httpStore.events.length ? '取消全选' : '全选'}
+              </button>
+              <button
+                onClick={() => httpStore.batchFavorite(deviceId, true)}
+                disabled={httpStore.selectedIds.size === 0}
+                className="btn bg-yellow-500/10 text-yellow-400 border border-yellow-500/20 hover:bg-yellow-500/20"
+                title="收藏选中的请求"
+              >
+                ⭐ 收藏 ({httpStore.selectedIds.size})
+              </button>
+              <button
+                onClick={handleExportSelected}
+                disabled={httpStore.selectedIds.size === 0}
+                className="btn btn-secondary"
+                title="导出选中的请求为 HAR"
+              >
+                导出 ({httpStore.selectedIds.size})
+              </button>
+              <button
+                onClick={() => setShowBatchDeleteConfirm(true)}
+                disabled={httpStore.selectedIds.size === 0}
+                className="btn btn-danger"
+                title="删除选中的请求"
+              >
+                删除 ({httpStore.selectedIds.size})
+              </button>
+            </>
+          )}
 
           <div className="h-7 w-px bg-border" />
 
@@ -666,18 +762,6 @@ function HTTPTab({
             条记录
           </span>
 
-          <button
-            onClick={() => httpStore.toggleSelectMode()}
-            className={clsx(
-              'btn shadow-sm',
-              httpStore.isSelectMode
-                ? 'bg-primary/20 text-primary border border-primary/30'
-                : 'btn-secondary'
-            )}
-          >
-            {httpStore.isSelectMode ? '✓ 退出批量' : '☐ 批量选择'}
-          </button>
-
           <label className="flex items-center gap-2.5 text-sm text-text-secondary cursor-pointer hover:text-text-primary transition-colors">
             <input
               type="checkbox"
@@ -696,7 +780,7 @@ function HTTPTab({
             rel="noopener noreferrer"
             className="btn btn-secondary"
           >
-            导出
+            导出全部
           </a>
 
           <button
@@ -732,17 +816,16 @@ function HTTPTab({
         </div>
       </div>
 
-      {/* Batch Selection Bar */}
-      <BatchSelectionBar
-        selectedCount={httpStore.selectedIds.size}
-        totalCount={httpStore.events.length}
-        isVisible={httpStore.isSelectMode && httpStore.selectedIds.size > 0}
-        onSelectAll={httpStore.selectAll}
-        onClearSelection={httpStore.clearSelectedIds}
-        onDelete={() => httpStore.batchDelete(deviceId)}
-        onFavorite={() => httpStore.batchFavorite(deviceId, true)}
-        onUnfavorite={() => httpStore.batchFavorite(deviceId, false)}
-        onExport={handleExportSelected}
+      {/* Batch Delete Confirmation Dialog */}
+      <ConfirmDialog
+        isOpen={showBatchDeleteConfirm}
+        onClose={() => setShowBatchDeleteConfirm(false)}
+        onConfirm={handleBatchDelete}
+        title="删除 HTTP 请求"
+        message={`确定要删除选中的 ${httpStore.selectedIds.size} 个 HTTP 请求吗？\n\n此操作不可恢复。`}
+        confirmText="确认删除"
+        cancelText="取消"
+        type="danger"
       />
     </div>
   )
@@ -836,6 +919,16 @@ function WebSocketTab({
   deviceId: string
   wsStore: ReturnType<typeof useWSStore.getState>
 }) {
+  // 防抖搜索
+  const searchTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  // 批量删除确认对话框
+  const [showBatchDeleteConfirm, setShowBatchDeleteConfirm] = useState(false)
+
+  const handleBatchDelete = useCallback(async () => {
+    await wsStore.batchDelete(deviceId)
+    setShowBatchDeleteConfirm(false)
+  }, [deviceId, wsStore])
+
   const handleSelectSession = useCallback(
     (sessionId: string) => {
       wsStore.selectSession(deviceId, sessionId)
@@ -859,6 +952,33 @@ function WebSocketTab({
     [deviceId, wsStore.selectedSessionId]
   )
 
+  // URL 搜索带防抖
+  const handleUrlSearch = useCallback(
+    (value: string) => {
+      wsStore.setFilter('urlContains', value)
+
+      // 清除之前的定时器
+      if (searchTimeoutRef.current) {
+        clearTimeout(searchTimeoutRef.current)
+      }
+
+      // 防抖 300ms 后刷新
+      searchTimeoutRef.current = setTimeout(() => {
+        wsStore.fetchSessions(deviceId)
+      }, 300)
+    },
+    [deviceId]
+  )
+
+  // 状态筛选立即刷新
+  const handleStatusChange = useCallback(
+    (value: string) => {
+      wsStore.setFilter('isOpen', value === '' ? undefined : value === 'true')
+      wsStore.fetchSessions(deviceId)
+    },
+    [deviceId]
+  )
+
   return (
     <div className="flex flex-col h-full">
       {/* Toolbar */}
@@ -874,22 +994,50 @@ function WebSocketTab({
 
           <div className="h-6 w-px bg-border" />
 
+          <button
+            onClick={() => wsStore.toggleSelectMode()}
+            className={clsx(
+              'btn',
+              wsStore.isSelectMode ? 'btn-primary' : 'btn-secondary'
+            )}
+            title={wsStore.isSelectMode ? '退出选择模式' : '进入选择模式'}
+          >
+            {wsStore.isSelectMode ? '取消选择' : '批量选择'}
+          </button>
+
+          {wsStore.isSelectMode && (
+            <>
+              <button
+                onClick={() => wsStore.selectAll()}
+                className="btn btn-secondary"
+                title="全选/取消全选"
+              >
+                {wsStore.selectedIds.size === wsStore.sessions.length ? '取消全选' : '全选'}
+              </button>
+              <button
+                onClick={() => setShowBatchDeleteConfirm(true)}
+                disabled={wsStore.selectedIds.size === 0}
+                className="btn btn-danger"
+                title="删除选中的会话"
+              >
+                删除 ({wsStore.selectedIds.size})
+              </button>
+            </>
+          )}
+
+          <div className="h-6 w-px bg-border" />
+
           <input
             type="text"
             value={wsStore.filters.urlContains || ''}
-            onChange={(e) => wsStore.setFilter('urlContains', e.target.value)}
+            onChange={(e) => handleUrlSearch(e.target.value)}
             placeholder="搜索 URL..."
             className="input w-56"
           />
 
           <select
             value={wsStore.filters.isOpen === undefined ? '' : String(wsStore.filters.isOpen)}
-            onChange={(e) =>
-              wsStore.setFilter(
-                'isOpen',
-                e.target.value === '' ? undefined : e.target.value === 'true'
-              )
-            }
+            onChange={(e) => handleStatusChange(e.target.value)}
             className="select"
           >
             <option value="">所有状态</option>
@@ -934,6 +1082,9 @@ function WebSocketTab({
             onSelect={handleSelectSession}
             loading={wsStore.sessionsLoading}
             autoScroll={wsStore.autoScroll}
+            isSelectMode={wsStore.isSelectMode}
+            selectedIds={wsStore.selectedIds}
+            onToggleSelect={wsStore.toggleSelectId}
           />
         </div>
         <div className="flex-1 min-w-[400px] bg-bg-dark/50">
@@ -949,6 +1100,18 @@ function WebSocketTab({
           />
         </div>
       </div>
+
+      {/* Batch Delete Confirmation Dialog */}
+      <ConfirmDialog
+        isOpen={showBatchDeleteConfirm}
+        onClose={() => setShowBatchDeleteConfirm(false)}
+        onConfirm={handleBatchDelete}
+        title="删除 WebSocket 会话"
+        message={`确定要删除选中的 ${wsStore.selectedIds.size} 个 WebSocket 会话吗？\n\n此操作将同时删除这些会话的所有帧数据，不可恢复。`}
+        confirmText="确认删除"
+        cancelText="取消"
+        type="danger"
+      />
     </div>
   )
 }
