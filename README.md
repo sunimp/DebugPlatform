@@ -4,7 +4,7 @@
 
 > [!IMPORTANT]
 >
-> **本项全部代码和文档均由 Agent AI 生成**
+> **本项目全部代码和文档均由 Agent AI 生成**
 
 > **当前版本**: v1.3.0 | [更新日志](docs/CHANGELOG.md) | [开发路线图](docs/ROADMAP.md)
 >
