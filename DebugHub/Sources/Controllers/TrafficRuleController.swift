@@ -64,9 +64,10 @@ struct TrafficRuleController: RouteCollection {
             try await existing.save(on: req.db)
             return existing
         } else {
-            // Create new
+            // Create new - generate UUID if not provided
+            let newId = dto.id ?? UUID().uuidString
             let rule = TrafficRuleModel(
-                id: dto.id,
+                id: newId,
                 deviceId: dto.deviceId,
                 name: dto.name,
                 matchType: dto.matchType,
