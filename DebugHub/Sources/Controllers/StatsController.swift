@@ -6,7 +6,13 @@
 //
 
 import Fluent
+import FluentSQL
 import Vapor
+
+// 用于解析 PostgreSQL pg_database_size 返回结果
+struct DatabaseSizeRow: Decodable {
+    let size: Int64
+}
 
 struct StatsController: RouteCollection {
     func boot(routes: RoutesBuilder) throws {
@@ -28,15 +34,25 @@ struct StatsController: RouteCollection {
         let trafficRuleCount = try await TrafficRuleModel.query(on: req.db).count()
         let deviceSessionCount = try await DeviceSessionModel.query(on: req.db).count()
         
-        // 获取数据库文件大小（如果是 SQLite）
+        // 获取数据库大小
         var databaseSizeBytes: Int64?
-        if let sqliteConfig = Environment.get("DATABASE_MODE"), sqliteConfig.lowercased() == "sqlite" {
+        let databaseMode = Environment.get("DATABASE_MODE")?.lowercased() ?? "postgres"
+        
+        if databaseMode == "sqlite" {
+            // SQLite: 获取文件大小
             let dataDir = getDataDirectory()
             let dbPath = Environment.get("SQLITE_PATH") ?? "\(dataDir)/debug_hub.sqlite"
             let fileManager = FileManager.default
             if let attrs = try? fileManager.attributesOfItem(atPath: dbPath),
                let fileSize = attrs[.size] as? Int64 {
                 databaseSizeBytes = fileSize
+            }
+        } else {
+            // PostgreSQL: 使用 pg_database_size 获取数据库大小
+            let dbName = Environment.get("DATABASE_NAME") ?? "debug_hub"
+            if let rawSQL = req.db as? SQLDatabase {
+                let result = try? await rawSQL.raw("SELECT pg_database_size('\(unsafeRaw: dbName)') as size").first(decoding: DatabaseSizeRow.self)
+                databaseSizeBytes = result?.size
             }
         }
         
@@ -55,7 +71,7 @@ struct StatsController: RouteCollection {
             deviceSessionCount: deviceSessionCount,
             onlineDeviceCount: onlineDeviceCount,
             databaseSizeBytes: databaseSizeBytes,
-            databaseMode: Environment.get("DATABASE_MODE") ?? "postgres"
+            databaseMode: databaseMode
         )
     }
 }
