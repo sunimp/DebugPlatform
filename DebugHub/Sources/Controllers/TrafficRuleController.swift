@@ -10,13 +10,13 @@ import Vapor
 
 struct TrafficRuleController: RouteCollection {
     func boot(routes: RoutesBuilder) throws {
-        let rules = routes.grouped("api", "traffic-rules")
+        let rules = routes.grouped("traffic-rules")
         rules.get(use: listRules)
         rules.post(use: createOrUpdateRule)
         rules.delete(":ruleId", use: deleteRule)
         
         // Device specific overrides
-        let deviceRules = routes.grouped("api", "devices", ":deviceId", "traffic-rules")
+        let deviceRules = routes.grouped("devices", ":deviceId", "traffic-rules")
         deviceRules.get(use: listDeviceRules)
     }
     
