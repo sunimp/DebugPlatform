@@ -427,4 +427,5 @@ export interface ServerStats {
   deviceSessionCount: number
   onlineDeviceCount: number
   databaseSizeBytes: number | null
+  databaseMode: string
 }

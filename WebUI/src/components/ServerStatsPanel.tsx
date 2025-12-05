@@ -2,15 +2,19 @@ import { useEffect, useState } from 'react'
 import { getServerStats } from '@/services/api'
 import type { ServerStats } from '@/types'
 
-function formatBytes(bytes: number | null): string {
-  if (bytes === null) return '-'
+function formatBytes(bytes: number | null | undefined): string {
+  if (bytes === null || bytes === undefined) return '-'
   if (bytes === 0) return '0 B'
+  if (isNaN(bytes)) return '-'
   
   const k = 1024
   const sizes = ['B', 'KB', 'MB', 'GB']
   const i = Math.floor(Math.log(bytes) / Math.log(k))
   
-  return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i]
+  // 确保索引不超出数组范围
+  const sizeIndex = Math.min(i, sizes.length - 1)
+  
+  return parseFloat((bytes / Math.pow(k, sizeIndex)).toFixed(1)) + ' ' + sizes[sizeIndex]
 }
 
 function formatNumber(num: number): string {
