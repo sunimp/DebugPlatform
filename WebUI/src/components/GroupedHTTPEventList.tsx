@@ -59,7 +59,7 @@ interface Props {
 function matchEventRule(event: HTTPEventSummary, rules: TrafficRule[]): TrafficRule | undefined {
     return rules.find(rule => {
         if (!rule.isEnabled) return false
-        
+
         if (rule.matchType === 'domain') {
             try {
                 const url = new URL(event.url)
@@ -68,7 +68,7 @@ function matchEventRule(event: HTTPEventSummary, rules: TrafficRule[]): TrafficR
                 return false
             }
         }
-        
+
         if (rule.matchType === 'urlRegex') {
             try {
                 const regex = new RegExp(rule.matchValue)
@@ -77,7 +77,7 @@ function matchEventRule(event: HTTPEventSummary, rules: TrafficRule[]): TrafficR
                 return false
             }
         }
-        
+
         return false
     })
 }
@@ -201,10 +201,10 @@ export function GroupedHTTPEventList({
 }: Props) {
     const parentRef = useRef<HTMLDivElement>(null)
     const [expandedKeys, setExpandedKeys] = useState<Set<string>>(new Set())
-    
+
     // 获取规则
     const { deviceRules, rules, fetchDeviceRules, fetchRules } = useRuleStore()
-    
+
     // 加载规则
     useEffect(() => {
         if (deviceId) {
@@ -213,18 +213,18 @@ export function GroupedHTTPEventList({
             fetchRules()
         }
     }, [deviceId, fetchDeviceRules, fetchRules])
-    
+
     // 当前适用的规则列表
     const applicableRules = useMemo(() => {
         return deviceId ? deviceRules : rules
     }, [deviceId, deviceRules, rules])
-    
+
     // 应用规则过滤（隐藏匹配 'hide' 规则的事件）
     const filteredEvents = useMemo(() => {
         if (applicableRules.length === 0) {
             return events
         }
-        
+
         return events.filter(event => {
             const rule = matchEventRule(event, applicableRules)
             return !rule || rule.action !== 'hide'
@@ -324,7 +324,7 @@ export function GroupedHTTPEventList({
         const isError = !event.statusCode || event.statusCode >= 400
         const isSelected = event.id === selectedId
         const isChecked = selectedIds.has(event.id)
-        
+
         // 检查是否匹配规则（用于高亮/标记）
         const matchedRule = matchEventRule(event, applicableRules)
         const isHighlighted = matchedRule?.action === 'highlight'
@@ -353,7 +353,7 @@ export function GroupedHTTPEventList({
                         {isMarked && !isHighlighted && <span className="text-xs" style={{ color: ruleColor || 'currentColor' }}>🏷️</span>}
                     </div>
                 )}
-                
+
                 {/* Checkbox */}
                 {isSelectMode && (
                     <div className="px-3 py-3.5 w-10 flex-shrink-0" onClick={(e) => e.stopPropagation()}>

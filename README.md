@@ -115,31 +115,34 @@ cd DebugPlatform/DebugHub
 
 ### 2. iOS App 集成
 
-将 `iOSProbe/Sources/` 添加到 Xcode 项目：
+iOS SDK 已独立为 [DebugProbe](../DebugProbe) 仓库，请参阅该仓库的 README 获取详细集成文档。
+
+**快速开始：**
 
 ```swift
+// Package.swift 添加依赖
+dependencies: [
+    .package(path: "../DebugProbe")  // 本地路径
+    // 或使用远程仓库
+    // .package(url: "https://github.com/user/DebugProbe.git", from: "1.0.0")
+]
+
+// 集成代码
 #if !APPSTORE
 import DebugProbe
 
 func setupDebugProbe() {
-	  let settings =DebugProbeSettings.shared
-    guard settings.isEnabled else { return }
-  
-  	settings.hubHost = "<DebugHub host>"
-	  settings.hubPort = "<DebugHub port>"
-  
     var config = DebugProbe.Configuration(
-        hubURL: settings.hubURL,
-        token: settings.token
+        hubURL: URL(string: "http://your-debug-hub:8081")!,
+        token: "your-token"
     )
     config.enablePersistence = true
-    
     DebugProbe.shared.start(configuration: config)
 }
 #endif
 ```
 
-SDK 默认自动拦截所有 HTTP 请求（Method Swizzling），无需额外配置。
+SDK 默认自动拦截所有 HTTP 请求（Method Swizzling），无需额外配置。更多功能请参阅 [DebugProbe README](../DebugProbe/README.md)。
 
 ### 3. 开发模式
 

@@ -43,7 +43,7 @@ interface Props {
 function matchEventRule(event: HTTPEventSummary, rules: TrafficRule[]): TrafficRule | undefined {
     return rules.find(rule => {
         if (!rule.isEnabled) return false
-        
+
         if (rule.matchType === 'domain') {
             try {
                 const url = new URL(event.url)
@@ -52,7 +52,7 @@ function matchEventRule(event: HTTPEventSummary, rules: TrafficRule[]): TrafficR
                 return false
             }
         }
-        
+
         if (rule.matchType === 'urlRegex') {
             try {
                 const regex = new RegExp(rule.matchValue)
@@ -61,7 +61,7 @@ function matchEventRule(event: HTTPEventSummary, rules: TrafficRule[]): TrafficR
                 return false
             }
         }
-        
+
         // header 类型需要详细数据，在 summary 列表中跳过
         return false
     })
@@ -79,10 +79,10 @@ export function VirtualHTTPEventTable({
 }: Props) {
     const parentRef = useRef<HTMLDivElement>(null)
     const lastFirstItemRef = useRef<string | null>(null)
-    
+
     // 获取规则
     const { deviceRules, rules, fetchDeviceRules, fetchRules } = useRuleStore()
-    
+
     // 加载规则
     useEffect(() => {
         if (deviceId) {
@@ -91,7 +91,7 @@ export function VirtualHTTPEventTable({
             fetchRules()
         }
     }, [deviceId, fetchDeviceRules, fetchRules])
-    
+
     // 当前适用的规则列表
     const applicableRules = useMemo(() => {
         return deviceId ? deviceRules : rules
@@ -101,13 +101,13 @@ export function VirtualHTTPEventTable({
     const rawHttpEvents = useMemo(() => {
         return items.filter((item) => !isSessionDivider(item)) as HTTPEventSummary[]
     }, [items])
-    
+
     // 应用规则过滤（隐藏匹配 'hide' 规则的事件）
     const httpEvents = useMemo(() => {
         if (applicableRules.length === 0) {
             return rawHttpEvents
         }
-        
+
         return rawHttpEvents.filter(event => {
             const rule = matchEventRule(event, applicableRules)
             // 如果匹配到 hide 规则，则隐藏
@@ -151,16 +151,16 @@ export function VirtualHTTPEventTable({
         const isError = !event.statusCode || event.statusCode >= 400
         const isSelected = event.id === selectedId
         const isChecked = selectedIds.has(event.id)
-        
+
         // 检查是否匹配规则（用于高亮/标记）
         const matchedRule = matchEventRule(event, applicableRules)
         const isHighlighted = matchedRule?.action === 'highlight'
         const isMarked = matchedRule?.action === 'mark'
         const ruleColor = matchedRule?.color
-        
+
         // 计算最终样式
-        const rowStyle = isMarked && ruleColor && !isSelected 
-            ? { ...style, borderLeftColor: ruleColor } 
+        const rowStyle = isMarked && ruleColor && !isSelected
+            ? { ...style, borderLeftColor: ruleColor }
             : style
 
         return (
