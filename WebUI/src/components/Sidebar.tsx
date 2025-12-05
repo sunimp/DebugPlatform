@@ -231,9 +231,10 @@ export function Sidebar() {
         {/* Rules Management Link */}
         <Link
           to="/rules"
-          className="text-xs text-text-muted hover:text-primary transition-colors px-2 py-1 rounded hover:bg-bg-light"
+          className="flex items-center gap-1.5 text-xs font-medium px-3 py-1.5 rounded-lg bg-bg-light text-text-secondary hover:text-primary hover:bg-bg-lighter transition-colors"
           title="管理流量规则"
         >
+          <span>⚙️</span>
           Rules
         </Link>
       </div>
