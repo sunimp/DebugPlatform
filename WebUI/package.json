@@ -11,14 +11,17 @@
     "lint": "eslint . --ext ts,tsx --report-unused-disable-directives --max-warnings 0"
   },
   "dependencies": {
+    "@tanstack/react-virtual": "^3.13.12",
+    "clsx": "^2.1.1",
+    "date-fns": "^4.1.0",
+    "protobufjs": "^7.5.4",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
     "react-router-dom": "^6.28.0",
-    "zustand": "^5.0.1",
-    "clsx": "^2.1.1",
-    "date-fns": "^4.1.0"
+    "zustand": "^5.0.1"
   },
   "devDependencies": {
+    "@types/protobufjs": "^6.0.0",
     "@types/react": "^18.3.12",
     "@types/react-dom": "^18.3.1",
     "@vitejs/plugin-react": "^4.3.3",
@@ -29,4 +32,3 @@
     "vite": "^5.4.11"
   }
 }
-

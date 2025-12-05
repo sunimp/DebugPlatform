@@ -5,9 +5,12 @@
 // Copyright © 2025 Sun. All rights reserved.
 //
 
-import { useEffect, useCallback } from 'react'
+import { useEffect, useCallback, useState } from 'react'
 import clsx from 'clsx'
 import { useDBStore } from '@/stores/dbStore'
+import { useProtobufStore } from '@/stores/protobufStore'
+import { ProtobufConfigPanel } from './ProtobufConfigPanel'
+import { BlobCell, isBase64Blob } from './BlobCell'
 
 interface DBInspectorProps {
     deviceId: string
@@ -60,6 +63,10 @@ export function DBInspector({ deviceId }: DBInspectorProps) {
         toggleDbSortDirection,
         getSortedDatabases,
     } = useDBStore()
+
+    // Protobuf 配置
+    const { descriptorMeta, getColumnConfig } = useProtobufStore()
+    const [showProtobufConfig, setShowProtobufConfig] = useState(false)
 
     // 初始化加载数据库（仅当数据库列表为空时）
     useEffect(() => {
@@ -395,6 +402,20 @@ export function DBInspector({ deviceId }: DBInspectorProps) {
                             </div>
                             <div className="flex items-center gap-2">
                                 <button
+                                    onClick={() => setShowProtobufConfig(!showProtobufConfig)}
+                                    className={clsx(
+                                        'px-3 py-1.5 rounded text-xs transition-colors',
+                                        showProtobufConfig
+                                            ? 'bg-purple-500/20 text-purple-400'
+                                            : descriptorMeta.length > 0
+                                                ? 'bg-purple-500/10 text-purple-400 hover:bg-purple-500/20'
+                                                : 'bg-bg-light text-text-secondary hover:bg-bg-lighter'
+                                    )}
+                                    title="Protobuf 配置"
+                                >
+                                    📦 Protobuf {descriptorMeta.length > 0 && `(${descriptorMeta.length})`}
+                                </button>
+                                <button
                                     onClick={() => setShowSchema(!showSchema)}
                                     className={clsx(
                                         'px-3 py-1.5 rounded text-xs transition-colors',
@@ -414,6 +435,18 @@ export function DBInspector({ deviceId }: DBInspectorProps) {
                                 </button>
                             </div>
                         </div>
+
+                        {/* Protobuf 配置面板 */}
+                        {showProtobufConfig && (
+                            <div className="px-4 py-3 border-b border-border bg-bg-dark/30">
+                                <ProtobufConfigPanel
+                                    dbId={selectedDb}
+                                    tableName={selectedTable}
+                                    columns={schema.map(col => ({ name: col.name, type: col.type }))}
+                                    onClose={() => setShowProtobufConfig(false)}
+                                />
+                            </div>
+                        )}
 
                         {/* Schema 面板 */}
                         {showSchema && schema.length > 0 && (
@@ -479,19 +512,34 @@ export function DBInspector({ deviceId }: DBInspectorProps) {
                                                 key={idx}
                                                 className="border-b border-border/30 hover:bg-bg-light/30 transition-colors"
                                             >
-                                                {tableData.columns.map((col) => (
-                                                    <td
-                                                        key={col.name}
-                                                        className="px-3 py-2 text-text-secondary max-w-xs truncate"
-                                                        title={row.values[col.name] ?? ''}
-                                                    >
-                                                        {row.values[col.name] === null ? (
-                                                            <span className="text-text-muted italic">NULL</span>
-                                                        ) : (
-                                                            row.values[col.name]
-                                                        )}
-                                                    </td>
-                                                ))}
+                                                {tableData.columns.map((col) => {
+                                                    const cellValue = row.values[col.name]
+                                                    const isBlobColumn = col.type?.toLowerCase() === 'blob'
+                                                    const hasProtobufConfig = selectedDb && selectedTable && getColumnConfig(selectedDb, selectedTable, col.name)
+                                                    const shouldTreatAsBlob = isBlobColumn || (cellValue && isBase64Blob(cellValue) && hasProtobufConfig)
+
+                                                    return (
+                                                        <td
+                                                            key={col.name}
+                                                            className="px-3 py-2 text-text-secondary max-w-xs"
+                                                        >
+                                                            {cellValue === null ? (
+                                                                <span className="text-text-muted italic">NULL</span>
+                                                            ) : shouldTreatAsBlob && selectedDb && selectedTable ? (
+                                                                <BlobCell
+                                                                    value={cellValue}
+                                                                    dbId={selectedDb}
+                                                                    tableName={selectedTable}
+                                                                    columnName={col.name}
+                                                                />
+                                                            ) : (
+                                                                <span className="truncate block" title={cellValue ?? ''}>
+                                                                    {cellValue}
+                                                                </span>
+                                                            )}
+                                                        </td>
+                                                    )
+                                                })}
                                             </tr>
                                         ))}
                                     </tbody>

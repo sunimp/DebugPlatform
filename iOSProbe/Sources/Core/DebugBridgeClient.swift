@@ -303,14 +303,35 @@ public final class DebugBridgeClient: NSObject {
         case "abort":
             return .abort
         case "modify":
+            // 处理修改请求
             if let mod = payload.modifiedRequest {
                 let request = BreakpointRequestSnapshot(
                     method: mod.method ?? "GET",
                     url: mod.url ?? "",
                     headers: mod.headers ?? [:],
-                    body: mod.body
+                    body: mod.bodyData
                 )
                 return .modify(BreakpointModification(request: request, response: nil))
+            }
+            // 处理修改响应
+            if let mod = payload.modifiedResponse {
+                let response = BreakpointResponseSnapshot(
+                    statusCode: mod.statusCode ?? 200,
+                    headers: mod.headers ?? [:],
+                    body: mod.bodyData
+                )
+                return .modify(BreakpointModification(request: nil, response: response))
+            }
+            return .resume
+        case "mockresponse":
+            // 处理 Mock 响应
+            if let mod = payload.modifiedResponse {
+                let response = BreakpointResponseSnapshot(
+                    statusCode: mod.statusCode ?? 200,
+                    headers: mod.headers ?? [:],
+                    body: mod.bodyData
+                )
+                return .mockResponse(response)
             }
             return .resume
         default:

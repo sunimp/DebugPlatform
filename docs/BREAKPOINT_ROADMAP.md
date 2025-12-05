@@ -1,6 +1,6 @@
 # Breakpoint 断点调试路线图
 
-## 当前状态 (v1.2)
+## 当前状态 (v1.3)
 
 ### 已实现
 - ✅ 断点规则创建和管理
@@ -9,86 +9,9 @@
 - ✅ HTTP 方法匹配
 - ✅ 规则启用/禁用
 - ✅ 实时同步到设备
-
-### ⚠️ 待修复问题
-- 🔴 **P0: 协议层消息格式不一致**
-  - iOS SDK 和 DebugHub 的 BreakpointResume 消息格式不匹配
-  - 导致断点恢复消息解码失败
-  
-- 🔴 **P0: 网络层未集成断点**
-  - `CaptureURLProtocol.startLoading()` 未调用 `BreakpointEngine.shared.checkRequestBreakpoint()`
-  - 即使规则同步成功，断点也不会生效
-
-- 🟡 **P2: breakpointHit 消息未处理**
-  - DebugHub 未处理 iOS SDK 发送的 `breakpointHit` 消息
-  - WebUI 无法感知断点命中
-
----
-
-## Phase 0: Bug 修复 (优先级: 🔴 Critical)
-
-### 0.1 消息格式统一
-
-**问题定位**:
-```swift
-// iOS SDK - BridgeMessage.swift
-struct BreakpointResumePayload {
-    let breakpointId: String
-    let requestId: String
-    let action: String  // ← 简单字符串
-    let modifiedRequest: ModifiedRequest?
-}
-
-// DebugHub - DeviceRegistry.swift
-struct BreakpointResumeDTO {
-    let requestId: String
-    let action: BreakpointActionDTO  // ← 嵌套对象
-}
-```
-
-**修复方案**: 统一使用简单字符串格式
-
-**预估**: 0.5 天
-
----
-
-### 0.2 网络层集成
-
-**修复位置**: `iOSProbe/Sources/Network/CaptureURLProtocol.swift`
-
-```swift
-override func startLoading() {
-    // 检查请求断点
-    if let rule = BreakpointEngine.shared.checkRequestBreakpoint(for: request) {
-        // 暂停请求，等待 Hub 响应
-        BreakpointEngine.shared.pauseRequest(request, rule: rule)
-        return
-    }
-    
-    // 继续正常请求
-    executeRequest()
-}
-```
-
-**预估**: 1 天
-
----
-
-### 0.3 breakpointHit 处理
-
-**修复位置**: `DebugHub/Sources/WebSocket/DebugBridgeHandler.swift`
-
-```swift
-case "breakpointHit":
-    let payload = try decoder.decode(BreakpointHitPayload.self, from: data)
-    // 转发到 WebUI
-    await RealtimeStreamHandler.broadcast(
-        deviceId: deviceId,
-        event: .breakpointHit(payload)
-    )
-```
-
-**预估**: 0.5 天
+- ✅ **网络层集成** - `CaptureURLProtocol.startLoading()` 调用断点检查
+- ✅ **消息格式统一** - BreakpointResumeDTO 添加 modifiedResponse 支持
+- ✅ **breakpointHit 处理** - DebugHub 处理并广播到 WebUI
 
 ---
 

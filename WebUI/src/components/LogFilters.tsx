@@ -1,4 +1,6 @@
+import { useState, useRef, useEffect } from 'react'
 import type { LogLevel } from '@/types'
+import { SEARCH_HELP } from '@/utils/logSearch'
 import clsx from 'clsx'
 
 interface Props {
@@ -8,10 +10,12 @@ interface Props {
   selectedSubsystem: string
   selectedCategory: string
   searchText: string
+  searchQuery: string
   onMinLevelChange: (level: LogLevel) => void
   onSubsystemChange: (value: string) => void
   onCategoryChange: (value: string) => void
   onSearchChange: (value: string) => void
+  onSearchQueryChange: (value: string) => void
 }
 
 // 日志级别配置（从高到低排列，符合用户预期）
@@ -39,12 +43,28 @@ export function LogFilters({
   selectedSubsystem,
   selectedCategory,
   searchText,
+  searchQuery,
   onMinLevelChange,
   onSubsystemChange,
   onCategoryChange,
   onSearchChange,
+  onSearchQueryChange,
 }: Props) {
+  const [showAdvancedSearch, setShowAdvancedSearch] = useState(false)
+  const [showHelp, setShowHelp] = useState(false)
+  const helpRef = useRef<HTMLDivElement>(null)
   const currentPriority = LEVEL_PRIORITY[minLevel]
+
+  // 点击外部关闭帮助
+  useEffect(() => {
+    function handleClickOutside(event: MouseEvent) {
+      if (helpRef.current && !helpRef.current.contains(event.target as Node)) {
+        setShowHelp(false)
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside)
+    return () => document.removeEventListener('mousedown', handleClickOutside)
+  }, [])
 
   return (
     <div className="flex flex-wrap items-center gap-4">
@@ -54,7 +74,7 @@ export function LogFilters({
           const isActive = level === minLevel
           const priority = LEVEL_PRIORITY[level]
           const isIncluded = priority >= currentPriority
-          
+
           return (
             <button
               key={level}
@@ -107,13 +127,62 @@ export function LogFilters({
       </select>
 
       {/* Search */}
-      <input
-        type="text"
-        value={searchText}
-        onChange={(e) => onSearchChange(e.target.value)}
-        placeholder="🔍 搜索日志内容..."
-        className="input min-w-[200px]"
-      />
+      <div className="flex-1 flex items-center gap-2 min-w-[200px] max-w-[600px]">
+        {/* 高级搜索切换 */}
+        <button
+          onClick={() => setShowAdvancedSearch(!showAdvancedSearch)}
+          className={clsx(
+            'px-2 py-1.5 rounded-lg text-xs font-medium transition-colors whitespace-nowrap',
+            showAdvancedSearch
+              ? 'bg-primary text-white'
+              : 'bg-bg-light text-text-muted hover:text-text-secondary'
+          )}
+          title="切换高级搜索"
+        >
+          {showAdvancedSearch ? '高级' : '简单'}
+        </button>
+
+        {showAdvancedSearch ? (
+          <div className="flex-1 relative">
+            <input
+              type="text"
+              value={searchQuery}
+              onChange={(e) => onSearchQueryChange(e.target.value)}
+              placeholder="level:error subsystem:Network message:timeout..."
+              className="input w-full font-mono text-sm"
+            />
+            {/* 帮助按钮 */}
+            <button
+              onClick={() => setShowHelp(!showHelp)}
+              className="absolute right-2 top-1/2 -translate-y-1/2 text-text-muted hover:text-text-secondary"
+              title="搜索语法帮助"
+            >
+              ?
+            </button>
+
+            {/* 帮助弹出框 */}
+            {showHelp && (
+              <div
+                ref={helpRef}
+                className="absolute top-full right-0 mt-2 w-80 p-3 bg-bg-dark border border-border rounded-lg shadow-xl z-50"
+              >
+                <h4 className="text-sm font-semibold text-text-primary mb-2">搜索语法</h4>
+                <pre className="text-xs text-text-secondary whitespace-pre-wrap font-mono">
+                  {SEARCH_HELP}
+                </pre>
+              </div>
+            )}
+          </div>
+        ) : (
+          <input
+            type="text"
+            value={searchText}
+            onChange={(e) => onSearchChange(e.target.value)}
+            placeholder="🔍 搜索日志内容..."
+            className="input flex-1"
+          />
+        )}
+      </div>
     </div>
   )
 }

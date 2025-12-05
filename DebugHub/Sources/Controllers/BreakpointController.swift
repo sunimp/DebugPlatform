@@ -197,7 +197,17 @@ struct BreakpointController: RouteCollection {
         }
 
         let action = try req.content.decode(BreakpointActionDTO.self)
-        let resume = BreakpointResumeDTO(requestId: requestId, action: action)
+        
+        // 从 pending hit 中获取 breakpointId
+        let breakpointId = BreakpointManager.shared.getPendingHits()
+            .first { $0.requestId == requestId }?.breakpointId ?? ""
+        
+        // 使用新的格式创建 resume，与 iOS SDK 格式匹配
+        let resume = BreakpointResumeDTO.from(
+            requestId: requestId,
+            breakpointId: breakpointId,
+            actionDTO: action
+        )
 
         // 发送到设备
         DeviceRegistry.shared.sendMessage(to: deviceId, message: .breakpointResume(resume))

@@ -3,6 +3,9 @@ import type { HTTPEventSummary, HTTPEventDetail } from '@/types'
 import * as api from '@/services/api'
 import { useRuleStore } from './ruleStore'
 
+// 分组模式
+export type GroupMode = 'none' | 'domain' | 'path'
+
 // 会话分隔符类型
 export interface SessionDivider {
   type: 'session-divider'
@@ -31,6 +34,9 @@ interface HTTPState {
   autoScroll: boolean
   currentSessionId: string | null
 
+  // 分组模式
+  groupMode: GroupMode
+
   // 批量选择
   selectedIds: Set<string>
   isSelectMode: boolean
@@ -57,6 +63,7 @@ interface HTTPState {
   toggleDomain: (domain: string) => void  // 切换域名选中状态
   clearDomains: () => void  // 清空域名选择（选择"全部"）
   setAutoScroll: (value: boolean) => void
+  setGroupMode: (mode: GroupMode) => void
   applyFilters: () => void
 
   // 会话管理
@@ -142,6 +149,7 @@ export const useHTTPStore = create<HTTPState>((set, get) => ({
   selectedIds: new Set(),
   isSelectMode: false,
   currentSessionId: null,
+  groupMode: 'none' as GroupMode,
 
   filters: {
     method: '',
@@ -273,6 +281,10 @@ export const useHTTPStore = create<HTTPState>((set, get) => ({
 
   setAutoScroll: (value: boolean) => {
     set({ autoScroll: value })
+  },
+
+  setGroupMode: (mode: GroupMode) => {
+    set({ groupMode: mode })
   },
 
   updateEventFavorite: (eventId: string, isFavorite: boolean) => {

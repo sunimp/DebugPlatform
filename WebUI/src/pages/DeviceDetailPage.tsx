@@ -10,7 +10,8 @@ import { useThemeStore } from '@/stores/themeStore'
 import { useSessionActivityStore } from '@/stores/sessionActivityStore'
 import { useBreakpointStore } from '@/stores/breakpointStore'
 import { realtimeService, parseHTTPEvent, parseLogEvent, parseWSEvent } from '@/services/realtime'
-import { HTTPEventTable } from '@/components/HTTPEventTable'
+import { VirtualHTTPEventTable } from '@/components/VirtualHTTPEventTable'
+import { GroupedHTTPEventList } from '@/components/GroupedHTTPEventList'
 import { HTTPEventDetail } from '@/components/HTTPEventDetail'
 import { LogList } from '@/components/LogList'
 import { LogFilters } from '@/components/LogFilters'
@@ -819,6 +820,27 @@ function HTTPTab({
 
           <div className="h-6 w-px bg-border/50" />
 
+          {/* 分组模式选择 */}
+          <div className="flex items-center gap-1">
+            <span className="text-xs text-text-muted mr-1">分组:</span>
+            {(['none', 'domain', 'path'] as const).map((mode) => (
+              <button
+                key={mode}
+                onClick={() => httpStore.setGroupMode(mode)}
+                className={clsx(
+                  'px-2 py-1 text-xs rounded transition-colors',
+                  httpStore.groupMode === mode
+                    ? 'bg-primary text-white'
+                    : 'bg-bg-light text-text-muted hover:text-text-secondary'
+                )}
+              >
+                {mode === 'none' ? '无' : mode === 'domain' ? '域名' : '路径'}
+              </button>
+            ))}
+          </div>
+
+          <div className="h-6 w-px bg-border/50" />
+
           <a
             href={getExportHTTPUrl(deviceId)}
             target="_blank"
@@ -841,15 +863,31 @@ function HTTPTab({
       {/* Split Panel */}
       <div className="flex-1 flex overflow-hidden">
         <div className="flex-1 min-w-[400px] border-r border-border flex flex-col">
-          <HTTPEventTable
-            items={httpStore.filteredItems}
-            selectedId={httpStore.selectedEventId}
-            onSelect={onSelectEvent}
-            autoScroll={httpStore.autoScroll}
-            isSelectMode={httpStore.isSelectMode}
-            selectedIds={httpStore.selectedIds}
-            onToggleSelect={httpStore.toggleSelectId}
-          />
+          {httpStore.groupMode === 'none' ? (
+            <VirtualHTTPEventTable
+              items={httpStore.filteredItems}
+              selectedId={httpStore.selectedEventId}
+              onSelect={onSelectEvent}
+              autoScroll={httpStore.autoScroll}
+              deviceId={deviceId}
+              isSelectMode={httpStore.isSelectMode}
+              selectedIds={httpStore.selectedIds}
+              onToggleSelect={httpStore.toggleSelectId}
+            />
+          ) : (
+            <GroupedHTTPEventList
+              events={httpStore.filteredItems.filter((item): item is typeof httpStore.events[0] =>
+                !('type' in item && item.type === 'session-divider')
+              )}
+              groupMode={httpStore.groupMode}
+              selectedId={httpStore.selectedEventId}
+              onSelect={onSelectEvent}
+              deviceId={deviceId}
+              isSelectMode={httpStore.isSelectMode}
+              selectedIds={httpStore.selectedIds}
+              onToggleSelect={httpStore.toggleSelectId}
+            />
+          )}
         </div>
         <div className="w-[45%] min-w-[400px] bg-bg-dark/50">
           <HTTPEventDetail
@@ -908,10 +946,12 @@ function LogsTab({
             selectedSubsystem={logStore.filters.subsystem}
             selectedCategory={logStore.filters.category}
             searchText={logStore.filters.text}
+            searchQuery={logStore.filters.searchQuery}
             onMinLevelChange={logStore.setMinLevel}
             onSubsystemChange={(v) => logStore.setFilter('subsystem', v)}
             onCategoryChange={(v) => logStore.setFilter('category', v)}
             onSearchChange={(v) => logStore.setFilter('text', v)}
+            onSearchQueryChange={logStore.setSearchQuery}
           />
         </div>
         <div className="flex items-center gap-3">

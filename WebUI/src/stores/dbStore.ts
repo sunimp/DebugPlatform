@@ -17,7 +17,7 @@ interface DBState {
     databases: DBInfo[]
     dbLoading: boolean
     dbError: string | null
-    
+
     // 数据库排序
     dbSortOrder: DBSortOrder
     dbSortAscending: boolean
@@ -63,7 +63,7 @@ interface DBState {
     setSort: (column: string) => void
     setSortAndReload: (deviceId: string, column: string) => Promise<void>
     setPageAndReload: (deviceId: string, page: number) => Promise<void>
-    
+
     // 数据库排序 Actions
     setDbSortOrder: (order: DBSortOrder) => void
     toggleDbSortDirection: () => void
@@ -76,7 +76,7 @@ interface DBState {
 
     // 重置状态（切换设备时调用）
     reset: () => void
-    
+
     // 获取排序后的数据库列表
     getSortedDatabases: () => DBInfo[]
 }
@@ -291,16 +291,16 @@ export const useDBStore = create<DBState>((set, get) => ({
     clearQueryResult: () => {
         set({ queryResult: null, queryError: null })
     },
-    
+
     // 数据库排序 Actions
     setDbSortOrder: (order: DBSortOrder) => {
         set({ dbSortOrder: order })
     },
-    
+
     toggleDbSortDirection: () => {
         set((state) => ({ dbSortAscending: !state.dbSortAscending }))
     },
-    
+
     // 获取排序后的数据库列表
     getSortedDatabases: () => {
         const { databases, dbSortOrder, dbSortAscending } = get()

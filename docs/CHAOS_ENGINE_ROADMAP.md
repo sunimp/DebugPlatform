@@ -1,57 +1,20 @@
 # Chaos Engine 故障注入路线图
 
-## 当前状态 (v1.2)
+## 当前状态 (v1.3)
 
 ### 已实现
 - ✅ 故障注入规则创建和管理
 - ✅ URL 匹配（精确、前缀、正则）
 - ✅ HTTP 方法匹配
-- ✅ 延迟注入（固定延迟）
+- ✅ 延迟注入（固定/随机延迟）
 - ✅ 错误码注入
+- ✅ 超时模拟
+- ✅ 连接重置模拟
+- ✅ 响应数据损坏
+- ✅ 请求丢弃
 - ✅ 规则启用/禁用
 - ✅ 实时同步到设备
-
-### ⚠️ 待修复问题
-- 🔴 **P0: 网络层未集成 Chaos**
-  - `CaptureURLProtocol.startLoading()` 未调用 `ChaosEngine.shared.evaluate()`
-  - 即使规则同步成功，故障注入也不会生效
-
----
-
-## Phase 0: Bug 修复 (优先级: 🔴 Critical)
-
-### 0.1 网络层集成
-
-**修复位置**: `iOSProbe/Sources/Network/CaptureURLProtocol.swift`
-
-```swift
-override func startLoading() {
-    // 评估 Chaos 规则
-    if let rule = ChaosEngine.shared.evaluate(request: request) {
-        applyChaosRule(rule)
-        return
-    }
-    
-    // 继续正常请求
-    executeRequest()
-}
-
-private func applyChaosRule(_ rule: ChaosRule) {
-    switch rule.action {
-    case .delay(let seconds):
-        DispatchQueue.main.asyncAfter(deadline: .now() + seconds) {
-            self.executeRequest()
-        }
-    case .error(let statusCode):
-        self.respondWithError(statusCode: statusCode)
-    case .timeout:
-        // 不响应，等待超时
-        break
-    }
-}
-```
-
-**预估**: 1 天
+- ✅ **网络层集成** - `CaptureURLProtocol.startLoading()` 调用 `ChaosEngine.shared.evaluate()`
 
 ---
 

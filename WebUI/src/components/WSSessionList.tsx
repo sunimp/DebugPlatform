@@ -193,9 +193,9 @@ function StatusIndicator({ isOpen, isSelectedRow }: { isOpen: boolean; isSelecte
     <span
       className={clsx(
         'w-3 h-3 rounded-full flex-shrink-0',
-        isOpen 
-          ? isSelectedRow 
-            ? 'bg-green-300 shadow-green-300/50 shadow-sm' 
+        isOpen
+          ? isSelectedRow
+            ? 'bg-green-300 shadow-green-300/50 shadow-sm'
             : 'bg-green-500 shadow-green-500/50 shadow-sm'
           : isSelectedRow
             ? 'bg-gray-300'

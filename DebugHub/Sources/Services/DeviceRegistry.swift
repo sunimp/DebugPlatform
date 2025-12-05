@@ -476,8 +476,71 @@ struct BreakpointResponseSnapshotDTO: Content {
 }
 
 struct BreakpointResumeDTO: Content {
+    let breakpointId: String
     let requestId: String
-    let action: BreakpointActionDTO
+    let action: String  // "continue", "abort", "modify", "mockResponse"
+    let modifiedRequest: ModifiedRequestDTO?
+    let modifiedResponse: ModifiedResponseDTO?  // 添加响应修改支持
+    
+    init(breakpointId: String = "", requestId: String, action: String, modifiedRequest: ModifiedRequestDTO? = nil, modifiedResponse: ModifiedResponseDTO? = nil) {
+        self.breakpointId = breakpointId
+        self.requestId = requestId
+        self.action = action
+        self.modifiedRequest = modifiedRequest
+        self.modifiedResponse = modifiedResponse
+    }
+    
+    /// 从 BreakpointActionDTO 创建 BreakpointResumeDTO
+    static func from(requestId: String, breakpointId: String = "", actionDTO: BreakpointActionDTO) -> BreakpointResumeDTO {
+        var modifiedRequest: ModifiedRequestDTO? = nil
+        var modifiedResponse: ModifiedResponseDTO? = nil
+        
+        // 处理请求修改
+        if let modification = actionDTO.modification?.request {
+            modifiedRequest = ModifiedRequestDTO(
+                method: modification.method,
+                url: modification.url,
+                headers: modification.headers,
+                body: modification.body
+            )
+        }
+        
+        // 处理响应修改（包括 mockResponse）
+        if let modification = actionDTO.modification?.response {
+            modifiedResponse = ModifiedResponseDTO(
+                statusCode: modification.statusCode,
+                headers: modification.headers,
+                body: modification.body
+            )
+        } else if let mock = actionDTO.mockResponse {
+            modifiedResponse = ModifiedResponseDTO(
+                statusCode: mock.statusCode,
+                headers: mock.headers,
+                body: mock.body
+            )
+        }
+        
+        return BreakpointResumeDTO(
+            breakpointId: breakpointId,
+            requestId: requestId,
+            action: actionDTO.type,
+            modifiedRequest: modifiedRequest,
+            modifiedResponse: modifiedResponse
+        )
+    }
+}
+
+struct ModifiedRequestDTO: Content {
+    let method: String?
+    let url: String?
+    let headers: [String: String]?
+    let body: String?  // base64 encoded
+}
+
+struct ModifiedResponseDTO: Content {
+    let statusCode: Int?
+    let headers: [String: String]?
+    let body: String?  // base64 encoded
 }
 
 struct BreakpointActionDTO: Content {

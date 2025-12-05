@@ -11,12 +11,45 @@
 
 ### 新增
 
+#### Traffic Rules 完整实现
+- HTTP 请求列表应用规则过滤（hide 规则隐藏匹配的请求）
+- HTTP 请求列表高亮显示（highlight 规则显示黄色背景和 ⭐ 图标）
+- HTTP 请求列表标记功能（mark 规则显示自定义颜色的左边框和 🏷️ 图标）
+- 支持域名匹配和 URL 正则匹配
+- VirtualHTTPEventTable 和 GroupedHTTPEventList 均支持规则
+
+#### DB Inspector Protobuf BLOB 解析
+- 支持上传 `.desc` 文件（由 `protoc --descriptor_set_out` 生成）
+- 支持配置 BLOB 列到 Protobuf 消息类型的映射
+- 自动识别和解析 BLOB 类型单元格
+- 三种视图模式：Schema 解码、Wire Format、Hex
+- 配置持久化到 localStorage
+- 点击 BLOB 单元格弹出详细解析面板
+
 #### DB Inspector SQL 查询功能
 - 支持自定义 SQL 查询（仅 SELECT）
 - 查询超时保护（5 秒自动中断）
 - 结果集大小限制（最多 1000 行）
 - 并发查询限制（串行队列）
 - 完整错误信息显示
+
+#### HTTP 虚拟滚动
+- 使用 `@tanstack/react-virtual` 实现虚拟滚动
+- 支持 10,000+ 请求流畅浏览
+- 预渲染 10 行以提升滚动体验
+
+#### HTTP 请求分组
+- 按域名分组：相同域名的请求归类显示
+- 按路径分组：按 URL 前缀分组
+- 分组统计：请求数、平均耗时、错误数、Mock 数
+- 支持展开/收起单个分组或全部
+
+#### 日志高级搜索
+- 支持字段搜索语法：`level:error subsystem:Network message:"timeout"`
+- 支持时间范围：`timestamp:>2025-12-05T10:00:00`
+- 支持正则表达式消息搜索
+- 搜索帮助弹出框
+- 简单/高级模式切换
 
 #### 功能模块路线图
 - 新增 7 个独立功能模块路线图文档
@@ -43,6 +76,15 @@
 - 移除 `fault` 级别，新增 `verbose` 级别
 
 ### 修复
+
+#### 断点功能修复
+- **消息格式统一**: `BreakpointResumeDTO` 添加 `modifiedResponse` 字段，与 iOS SDK 格式匹配
+- **网络层集成已完成**: `CaptureURLProtocol.startLoading()` 已正确调用 `BreakpointEngine` 和 `ChaosEngine`
+- **breakpointHit 处理已完成**: DebugHub 正确处理断点命中并广播到 WebUI
+
+#### Chaos Engine 修复
+- **网络层集成已完成**: `CaptureURLProtocol` 已集成完整的 Chaos 故障注入支持
+- 支持延迟注入、超时模拟、连接重置、错误码注入、数据损坏、请求丢弃
 
 #### SQLite 内存安全
 - 修复 `tableExists()` 方法的内存 bug

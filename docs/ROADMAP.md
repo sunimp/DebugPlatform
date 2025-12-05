@@ -15,44 +15,10 @@
 | **HTTP Inspector** | [HTTP_INSPECTOR_ROADMAP.md](HTTP_INSPECTOR_ROADMAP.md) | v1.2 稳定 | 虚拟滚动优化 |
 | **WebSocket Inspector** | [WS_INSPECTOR_ROADMAP.md](WS_INSPECTOR_ROADMAP.md) | v1.2 稳定 | 消息搜索/过滤 |
 | **Log Viewer** | [LOG_VIEWER_ROADMAP.md](LOG_VIEWER_ROADMAP.md) | v1.3 增强 | 高级搜索语法 |
-| **DB Inspector** | [DB_INSPECTOR_ROADMAP.md](DB_INSPECTOR_ROADMAP.md) | v0.2 稳定 | 数据编辑 |
+| **DB Inspector** | [DB_INSPECTOR_ROADMAP.md](DB_INSPECTOR_ROADMAP.md) | v1.3 稳定 | 数据编辑 |
 | **Mock Engine** | [MOCK_ENGINE_ROADMAP.md](MOCK_ENGINE_ROADMAP.md) | v1.0 基础 | 动态响应模板 |
-| **Breakpoint** | [BREAKPOINT_ROADMAP.md](BREAKPOINT_ROADMAP.md) | ⚠️ 待修复 | 协议统一 |
-| **Chaos Engine** | [CHAOS_ENGINE_ROADMAP.md](CHAOS_ENGINE_ROADMAP.md) | ⚠️ 待修复 | 网络层集成 |
-
----
-
-## ⚠️ 待修复问题 (P0)
-
-### 1. 断点/Chaos 未生效
-
-**问题**: iOS SDK 网络层未集成断点和故障注入
-
-**影响**: 即使规则同步成功，断点和故障注入也不会生效
-
-**修复位置**: `iOSProbe/Sources/Network/CaptureURLProtocol.swift`
-
-**详情**: [BREAKPOINT_ROADMAP.md](BREAKPOINT_ROADMAP.md#phase-0-bug-修复-优先级-critical) | [CHAOS_ENGINE_ROADMAP.md](CHAOS_ENGINE_ROADMAP.md#phase-0-bug-修复-优先级-critical)
-
----
-
-### 2. 断点消息格式不一致
-
-**问题**: iOS SDK 和 DebugHub 的 `BreakpointResume` 消息格式不匹配
-
-**影响**: 断点恢复消息解码失败
-
-**详情**: [BREAKPOINT_ROADMAP.md](BREAKPOINT_ROADMAP.md#01-消息格式统一)
-
----
-
-### 3. breakpointHit 消息未处理
-
-**问题**: DebugHub 未处理 iOS SDK 发送的 `breakpointHit` 消息
-
-**影响**: WebUI 无法感知断点命中
-
-**详情**: [BREAKPOINT_ROADMAP.md](BREAKPOINT_ROADMAP.md#03-breakpointhit-处理)
+| **Breakpoint** | [BREAKPOINT_ROADMAP.md](BREAKPOINT_ROADMAP.md) | ✅ v1.3 已修复 | 请求修改 UI |
+| **Chaos Engine** | [CHAOS_ENGINE_ROADMAP.md](CHAOS_ENGINE_ROADMAP.md) | ✅ v1.3 已修复 | DNS 失败模拟 |
 
 ---
 

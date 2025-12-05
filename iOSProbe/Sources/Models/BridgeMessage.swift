@@ -241,20 +241,40 @@ public struct ReplayRequestPayload: Codable {
 public struct BreakpointResumePayload: Codable {
     public let breakpointId: String
     public let requestId: String
-    public let action: String  // "continue", "abort", "modify"
+    public let action: String  // "continue", "resume", "abort", "modify", "mockResponse"
     public let modifiedRequest: ModifiedRequest?
+    public let modifiedResponse: ModifiedResponse?
     
     public struct ModifiedRequest: Codable {
         public let method: String?
         public let url: String?
         public let headers: [String: String]?
-        public let body: Data?
+        public let body: String?  // base64 encoded
+        
+        /// 解码 body 为 Data
+        public var bodyData: Data? {
+            guard let body = body else { return nil }
+            return Data(base64Encoded: body)
+        }
     }
     
-    public init(breakpointId: String, requestId: String, action: String, modifiedRequest: ModifiedRequest? = nil) {
+    public struct ModifiedResponse: Codable {
+        public let statusCode: Int?
+        public let headers: [String: String]?
+        public let body: String?  // base64 encoded
+        
+        /// 解码 body 为 Data
+        public var bodyData: Data? {
+            guard let body = body else { return nil }
+            return Data(base64Encoded: body)
+        }
+    }
+    
+    public init(breakpointId: String, requestId: String, action: String, modifiedRequest: ModifiedRequest? = nil, modifiedResponse: ModifiedResponse? = nil) {
         self.breakpointId = breakpointId
         self.requestId = requestId
         self.action = action
         self.modifiedRequest = modifiedRequest
+        self.modifiedResponse = modifiedResponse
     }
 }

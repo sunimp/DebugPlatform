@@ -29,6 +29,18 @@ export default defineConfig({
   build: {
     outDir: 'dist',
     emptyOutDir: true,
+    rollupOptions: {
+      output: {
+        manualChunks: {
+          // 将 protobufjs 分离成独立 chunk
+          protobuf: ['protobufjs'],
+          // 将 react 相关依赖分离
+          vendor: ['react', 'react-dom', 'react-router-dom'],
+          // 将状态管理分离
+          zustand: ['zustand'],
+        },
+      },
+    },
   },
 })
 

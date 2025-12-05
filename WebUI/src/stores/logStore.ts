@@ -1,6 +1,7 @@
 import { create } from 'zustand'
 import type { LogEvent, LogLevel } from '@/types'
 import * as api from '@/services/api'
+import { parseLogSearchQuery, filterLogsWithSearch } from '@/utils/logSearch'
 
 // 日志级别优先级（从低到高）: verbose < debug < info < warning < error
 // 选中某个级别时，显示该级别及更高级别的日志
@@ -18,12 +19,13 @@ interface Filters {
   category: string
   text: string
   traceId: string
+  searchQuery: string  // 高级搜索查询
 }
 
-// 过滤逻辑
-function filterEvents(events: LogEvent[], filters: Filters): LogEvent[] {
+// 基础过滤逻辑（不含高级搜索）
+function basicFilterEvents(events: LogEvent[], filters: Filters): LogEvent[] {
   const minPriority = LEVEL_PRIORITY[filters.minLevel]
-  
+
   return events.filter((event) => {
     // Level 过滤: 只显示大于等于最低级别的日志
     const eventPriority = LEVEL_PRIORITY[event.level] ?? 0
@@ -35,9 +37,11 @@ function filterEvents(events: LogEvent[], filters: Filters): LogEvent[] {
     // Category 过滤
     if (filters.category && event.category !== filters.category) return false
 
-    // 文本搜索
-    if (filters.text && !event.message.toLowerCase().includes(filters.text.toLowerCase())) {
-      return false
+    // 文本搜索（非高级搜索模式）
+    if (filters.text && !filters.searchQuery) {
+      if (!event.message.toLowerCase().includes(filters.text.toLowerCase())) {
+        return false
+      }
     }
 
     // TraceId 过滤
@@ -45,6 +49,20 @@ function filterEvents(events: LogEvent[], filters: Filters): LogEvent[] {
 
     return true
   })
+}
+
+// 综合过滤（包含高级搜索）
+function filterEvents(events: LogEvent[], filters: Filters): LogEvent[] {
+  // 先应用基础过滤
+  let filtered = basicFilterEvents(events, filters)
+
+  // 如果有高级搜索查询，应用高级搜索
+  if (filters.searchQuery) {
+    const parsedSearch = parseLogSearchQuery(filters.searchQuery)
+    filtered = filterLogsWithSearch(filtered, parsedSearch, filters.minLevel)
+  }
+
+  return filtered
 }
 
 interface LogState {
@@ -70,6 +88,7 @@ interface LogState {
   clearEvents: () => void
   setFilter: (key: string, value: unknown) => void
   setMinLevel: (level: LogLevel) => void
+  setSearchQuery: (query: string) => void
   setAutoScroll: (value: boolean) => void
   applyFilters: () => void
 }
@@ -92,6 +111,7 @@ export const useLogStore = create<LogState>((set, get) => ({
     category: '',
     text: '',
     traceId: '',
+    searchQuery: '',  // 高级搜索查询
   },
 
   fetchEvents: async (deviceId: string) => {
@@ -153,6 +173,14 @@ export const useLogStore = create<LogState>((set, get) => ({
   setMinLevel: (level: LogLevel) => {
     set((state) => {
       const newFilters = { ...state.filters, minLevel: level }
+      const filteredEvents = filterEvents(state.events, newFilters)
+      return { filters: newFilters, filteredEvents }
+    })
+  },
+
+  setSearchQuery: (query: string) => {
+    set((state) => {
+      const newFilters = { ...state.filters, searchQuery: query }
       const filteredEvents = filterEvents(state.events, newFilters)
       return { filters: newFilters, filteredEvents }
     })
