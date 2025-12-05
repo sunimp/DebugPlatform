@@ -2,20 +2,13 @@ import { useNavigate } from 'react-router-dom'
 import type { DeviceListItem } from '@/types'
 import { formatRelativeTime } from '@/utils/format'
 import { useDeviceStore } from '@/stores/deviceStore'
+import { getPlatformIcon, SIMULATOR_ICON } from '@/utils/deviceIcons'
 import clsx from 'clsx'
 import type { CSSProperties } from 'react'
 
 interface Props {
   device: DeviceListItem
   style?: CSSProperties
-}
-
-const platformIcons: Record<string, string> = {
-  iOS: '🍎',
-  iPadOS: '📱',
-  macOS: '💻',
-  watchOS: '⌚',
-  tvOS: '📺',
 }
 
 export function DeviceCard({ device, style }: Props) {
@@ -48,7 +41,7 @@ export function DeviceCard({ device, style }: Props) {
               ? 'from-primary/20 to-accent-blue/20 border border-primary/20'
               : 'from-bg-light to-bg-medium border border-border'
           )}>
-            {platformIcons[device.platform] || '📱'}
+            {getPlatformIcon(device.platform)}
           </div>
           <div>
             <h3 className="font-semibold text-text-primary group-hover:text-primary transition-colors line-clamp-1">
@@ -67,7 +60,7 @@ export function DeviceCard({ device, style }: Props) {
               className="badge bg-purple-500/20 text-purple-400 border-purple-500/30"
               title="模拟器"
             >
-              💻 模拟器
+              {SIMULATOR_ICON} 模拟器
             </span>
           )}
           <button

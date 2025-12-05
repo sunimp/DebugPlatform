@@ -5,6 +5,7 @@ import { useDeviceStore } from '@/stores/deviceStore'
 import { useHTTPStore } from '@/stores/httpStore'
 import { useWSStore } from '@/stores/wsStore'
 import { useRuleStore } from '@/stores/ruleStore'
+import { getPlatformIcon, SIMULATOR_ICON } from '@/utils/deviceIcons'
 import clsx from 'clsx'
 
 export function Sidebar() {
@@ -290,7 +291,7 @@ export function Sidebar() {
                         ? "bg-bg-darkest/20"
                         : "bg-bg-medium"
                     )}>
-                      <span className="text-xl">📱</span>
+                      <span className="text-xl">{getPlatformIcon(device.platform)}</span>
                     </div>
                     {device.isOnline && (
                       <span className="absolute -bottom-0.5 -right-0.5 w-3 h-3 bg-green-500 border-2 border-bg-dark rounded-full" />
@@ -306,7 +307,7 @@ export function Sidebar() {
                             ? "bg-bg-darkest/20 text-bg-darkest"
                             : "bg-purple-500/20 text-purple-400"
                         )} title="模拟器">
-                          💻
+                          {SIMULATOR_ICON}
                         </span>
                       )}
                     </div>

@@ -27,6 +27,7 @@ import { ChaosManager } from '@/components/ChaosManager'
 import { DBInspector } from '@/components/DBInspector'
 import { useKeyboardShortcuts } from '@/hooks/useKeyboardShortcuts'
 import { getExportHTTPUrl, getExportLogsUrl, getExportHARUrl, getWSSessionDetail } from '@/services/api'
+import { getPlatformIcon, SIMULATOR_ICON } from '@/utils/deviceIcons'
 import type { BreakpointHit } from '@/types'
 import clsx from 'clsx'
 
@@ -409,7 +410,7 @@ export function DeviceDetailPage() {
 
           <div className="flex items-center gap-4 flex-1">
             <div className="w-12 h-12 rounded-lg bg-primary/10 flex items-center justify-center border border-border">
-              <span className="text-2xl">📱</span>
+              <span className="text-2xl">{currentDevice ? getPlatformIcon(currentDevice.deviceInfo.platform) : '📱'}</span>
             </div>
             <div>
               <h1 className="text-xl font-bold text-text-primary flex items-center gap-2">
@@ -419,7 +420,7 @@ export function DeviceDetailPage() {
                     className="text-sm px-2 py-0.5 rounded bg-purple-500/20 text-purple-400 border border-purple-500/30"
                     title="模拟器"
                   >
-                    💻 模拟器
+                    {SIMULATOR_ICON} 模拟器
                   </span>
                 )}
                 {deviceId && (
