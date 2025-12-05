@@ -6,9 +6,9 @@
 >
 > **本项全部代码和文档均有 Agent AI 生成**
 
-> **当前版本**: v1.2.0 | [更新日志](docs/CHANGELOG.md) | [开发路线图](docs/ROADMAP.md)
+> **当前版本**: v1.3.0 | [更新日志](docs/CHANGELOG.md) | [开发路线图](docs/ROADMAP.md)
 >
-> **最后更新**: 2025-12-05
+> **最后更新**: 2025-12-06
 
 ## ✨ 功能特性
 
@@ -43,6 +43,20 @@
 - 💾 **事件持久化** - 断线时本地 SQLite 缓存，重连后自动恢复
 - 🐘 **PostgreSQL 支持** - 生产环境高并发数据库
 - ⚙️ **运行时配置** - 动态修改 Hub 地址，无需重新编译
+
+---
+
+## 📚 功能模块路线图
+
+| 模块 | 文档 | 描述 |
+|------|------|------|
+| **HTTP Inspector** | [HTTP_INSPECTOR_ROADMAP](docs/HTTP_INSPECTOR_ROADMAP.md) | HTTP 请求捕获和分析 |
+| **WebSocket Inspector** | [WS_INSPECTOR_ROADMAP](docs/WS_INSPECTOR_ROADMAP.md) | WebSocket 会话监控 |
+| **Log Viewer** | [LOG_VIEWER_ROADMAP](docs/LOG_VIEWER_ROADMAP.md) | 日志查看和分析 |
+| **DB Inspector** | [DB_INSPECTOR_ROADMAP](docs/DB_INSPECTOR_ROADMAP.md) | SQLite 数据库检查 |
+| **Mock Engine** | [MOCK_ENGINE_ROADMAP](docs/MOCK_ENGINE_ROADMAP.md) | 请求 Mock 规则引擎 |
+| **Breakpoint** | [BREAKPOINT_ROADMAP](docs/BREAKPOINT_ROADMAP.md) | 请求断点调试 |
+| **Chaos Engine** | [CHAOS_ENGINE_ROADMAP](docs/CHAOS_ENGINE_ROADMAP.md) | 故障注入测试 |
 
 ---
 
@@ -107,11 +121,15 @@ cd DebugPlatform/DebugHub
 import DebugProbe
 
 func setupDebugProbe() {
-    guard DebugProbeSettings.shared.isEnabled else { return }
-    
+	  let settings =DebugProbeSettings.shared
+    guard settings.isEnabled else { return }
+  
+  	settings.hubHost = "<DebugHub host>"
+	  settings.hubPort = "<DebugHub port>"
+  
     var config = DebugProbe.Configuration(
-        hubURL: DebugProbeSettings.shared.hubURL,
-        token: DebugProbeSettings.shared.token
+        hubURL: settings.hubURL,
+        token: settings.token
     )
     config.enablePersistence = true
     

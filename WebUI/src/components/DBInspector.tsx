@@ -38,6 +38,9 @@ export function DBInspector({ deviceId }: DBInspectorProps) {
         queryResult,
         queryLoading,
         queryError,
+        // 数据库排序状态
+        dbSortOrder,
+        dbSortAscending,
         // Actions
         loadDatabases,
         loadTables,
@@ -52,6 +55,10 @@ export function DBInspector({ deviceId }: DBInspectorProps) {
         setQueryMode,
         setQueryInput,
         executeQuery,
+        // 数据库排序 Actions
+        setDbSortOrder,
+        toggleDbSortDirection,
+        getSortedDatabases,
     } = useDBStore()
 
     // 初始化加载数据库（仅当数据库列表为空时）
@@ -161,11 +168,33 @@ export function DBInspector({ deviceId }: DBInspectorProps) {
             <div className="w-64 flex-shrink-0 border-r border-border bg-bg-dark flex flex-col">
                 {/* 数据库列表 */}
                 <div className="p-3 border-b border-border">
-                    <h3 className="text-xs font-medium text-text-muted uppercase tracking-wider mb-2">
-                        数据库
-                    </h3>
+                    <div className="flex items-center justify-between mb-2">
+                        <h3 className="text-xs font-medium text-text-muted uppercase tracking-wider">
+                            数据库
+                        </h3>
+                        {/* 排序控件 */}
+                        <div className="flex items-center gap-1">
+                            <select
+                                value={dbSortOrder}
+                                onChange={(e) => setDbSortOrder(e.target.value as 'name' | 'size' | 'tableCount')}
+                                className="text-2xs bg-bg-light border border-border rounded px-1.5 py-0.5 text-text-secondary focus:outline-none focus:border-primary"
+                                title="排序方式"
+                            >
+                                <option value="name">名称</option>
+                                <option value="size">大小</option>
+                                <option value="tableCount">表数</option>
+                            </select>
+                            <button
+                                onClick={toggleDbSortDirection}
+                                className="p-1 rounded hover:bg-bg-light text-text-muted hover:text-text-secondary transition-colors"
+                                title={dbSortAscending ? '升序' : '降序'}
+                            >
+                                <span className="text-xs">{dbSortAscending ? '↑' : '↓'}</span>
+                            </button>
+                        </div>
+                    </div>
                     <div className="space-y-1">
-                        {databases.map((db) => (
+                        {getSortedDatabases().map((db) => (
                             <button
                                 key={db.descriptor.id}
                                 onClick={() => handleSelectDb(db.descriptor.id)}

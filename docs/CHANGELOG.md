@@ -7,6 +7,71 @@
 
 ---
 
+## [1.3.0] - 2025-12-06
+
+### 新增
+
+#### DB Inspector SQL 查询功能
+- 支持自定义 SQL 查询（仅 SELECT）
+- 查询超时保护（5 秒自动中断）
+- 结果集大小限制（最多 1000 行）
+- 并发查询限制（串行队列）
+- 完整错误信息显示
+
+#### 功能模块路线图
+- 新增 7 个独立功能模块路线图文档
+- HTTP_INSPECTOR_ROADMAP.md
+- WS_INSPECTOR_ROADMAP.md
+- LOG_VIEWER_ROADMAP.md
+- MOCK_ENGINE_ROADMAP.md
+- BREAKPOINT_ROADMAP.md
+- CHAOS_ENGINE_ROADMAP.md
+- 更新 ROADMAP.md 整合所有模块
+
+### 改进
+
+#### UI 选中样式优化
+- **DB Inspector**: 数据库和表选中改为实色主题块（`bg-primary`/`bg-accent-blue`）
+- **HTTP 列表**: 选中行改为实色主题块，内部元素颜色自适应
+- **WebSocket 列表**: 选中行改为实色主题块，状态指示器颜色自适应
+- 所有选中样式添加阴影效果，更突出
+
+#### 日志级别筛选优化
+- 筛选模式从多选改为单选层级模式
+- 选择某个级别后，显示该级别及更高级别的日志
+- 日志级别调整为 CocoaLumberjack 标准：error > warning > info > debug > verbose
+- 移除 `fault` 级别，新增 `verbose` 级别
+
+### 修复
+
+#### SQLite 内存安全
+- 修复 `tableExists()` 方法的内存 bug
+- 使用 `SQLITE_TRANSIENT` 确保字符串正确绑定
+- 防止 C 字符串在 `sqlite3_step()` 执行前被释放
+
+### 改进文件
+
+| 文件 | 变更类型 |
+|------|----------|
+| `WebUI/src/components/DBInspector.tsx` | SQL 查询 UI、选中样式 |
+| `WebUI/src/components/HTTPEventTable.tsx` | 选中样式优化 |
+| `WebUI/src/components/WSSessionList.tsx` | 选中样式优化 |
+| `WebUI/src/components/LogFilters.tsx` | 单选层级模式 |
+| `WebUI/src/components/LogList.tsx` | 日志级别标签 |
+| `WebUI/src/stores/dbStore.ts` | SQL 查询状态 |
+| `WebUI/src/stores/logStore.ts` | 层级筛选逻辑 |
+| `WebUI/src/types/index.ts` | LogLevel 类型 |
+| `WebUI/src/utils/format.ts` | 日志级别样式 |
+| `WebUI/tailwind.config.js` | 颜色配置 |
+| `iOSProbe/Sources/Database/SQLiteInspector.swift` | 超时保护、内存修复 |
+| `iOSProbe/Sources/Models/DebugEvent.swift` | Level 枚举 |
+| `iOSProbe/Sources/Log/AppLogger.swift` | verbose 方法 |
+| `iOSProbe/Sources/Log/DebugProbeDDLogger.swift` | DDLogFlag 映射 |
+| `DebugHub/Sources/Controllers/DatabaseController.swift` | executeQuery 端点 |
+| `docs/*.md` | 路线图文档 |
+
+---
+
 ## [1.2.0] - 2025-12-4
 
 ### 新增

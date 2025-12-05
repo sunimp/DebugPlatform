@@ -9,11 +9,18 @@ import { create } from 'zustand'
 import type { DBInfo, DBTableInfo, DBColumnInfo, DBTablePageResult, DBQueryResponse } from '@/types'
 import * as api from '@/services/api'
 
+// 数据库排序方式
+export type DBSortOrder = 'name' | 'size' | 'tableCount'
+
 interface DBState {
     // 数据库列表
     databases: DBInfo[]
     dbLoading: boolean
     dbError: string | null
+    
+    // 数据库排序
+    dbSortOrder: DBSortOrder
+    dbSortAscending: boolean
 
     // 当前选中
     selectedDb: string | null
@@ -56,6 +63,10 @@ interface DBState {
     setSort: (column: string) => void
     setSortAndReload: (deviceId: string, column: string) => Promise<void>
     setPageAndReload: (deviceId: string, page: number) => Promise<void>
+    
+    // 数据库排序 Actions
+    setDbSortOrder: (order: DBSortOrder) => void
+    toggleDbSortDirection: () => void
 
     // SQL 查询 Actions
     setQueryMode: (mode: boolean) => void
@@ -65,12 +76,17 @@ interface DBState {
 
     // 重置状态（切换设备时调用）
     reset: () => void
+    
+    // 获取排序后的数据库列表
+    getSortedDatabases: () => DBInfo[]
 }
 
 const initialState = {
     databases: [],
     dbLoading: false,
     dbError: null,
+    dbSortOrder: 'name' as DBSortOrder,
+    dbSortAscending: true,
     selectedDb: null,
     selectedTable: null,
     tables: [],
@@ -274,6 +290,36 @@ export const useDBStore = create<DBState>((set, get) => ({
 
     clearQueryResult: () => {
         set({ queryResult: null, queryError: null })
+    },
+    
+    // 数据库排序 Actions
+    setDbSortOrder: (order: DBSortOrder) => {
+        set({ dbSortOrder: order })
+    },
+    
+    toggleDbSortDirection: () => {
+        set((state) => ({ dbSortAscending: !state.dbSortAscending }))
+    },
+    
+    // 获取排序后的数据库列表
+    getSortedDatabases: () => {
+        const { databases, dbSortOrder, dbSortAscending } = get()
+        const sorted = [...databases].sort((a, b) => {
+            let comparison = 0
+            switch (dbSortOrder) {
+                case 'name':
+                    comparison = a.descriptor.name.localeCompare(b.descriptor.name)
+                    break
+                case 'size':
+                    comparison = (a.fileSizeBytes ?? 0) - (b.fileSizeBytes ?? 0)
+                    break
+                case 'tableCount':
+                    comparison = (a.tableCount ?? 0) - (b.tableCount ?? 0)
+                    break
+            }
+            return dbSortAscending ? comparison : -comparison
+        })
+        return sorted
     },
 
     reset: () => {
