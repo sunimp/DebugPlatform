@@ -61,6 +61,36 @@ class RealtimeService {
     }
   }
 
+  /**
+   * 暂停重连（用于清空设备数据等场景）
+   * 与 disconnect 不同，这个方法不会清除 currentDeviceId
+   * 调用后需要手动调用 resumeReconnect 或 connect 来恢复连接
+   */
+  pauseReconnect() {
+    this.shouldReconnect = false
+
+    if (this.reconnectTimer) {
+      clearTimeout(this.reconnectTimer)
+      this.reconnectTimer = null
+    }
+
+    if (this.ws) {
+      this.ws.close()
+      this.ws = null
+    }
+  }
+
+  /**
+   * 恢复重连
+   * 如果之前有连接的设备，会尝试重新连接
+   */
+  resumeReconnect() {
+    if (this.currentDeviceId) {
+      this.shouldReconnect = true
+      this.connect(this.currentDeviceId)
+    }
+  }
+
   private scheduleReconnect() {
     if (!this.shouldReconnect || !this.currentDeviceId) return
 
@@ -108,6 +138,7 @@ export function parseHTTPEvent(payload: string): HTTPEventSummary {
     startTime: data.request.startTime,
     duration: data.response?.duration ?? null,
     isMocked: data.isMocked,
+    mockRuleId: data.mockRuleId ?? null,
     errorDescription: data.response?.errorDescription ?? null,
     traceId: data.request.traceId ?? null,
     isFavorite: data.isFavorite ?? false,

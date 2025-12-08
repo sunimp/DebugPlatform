@@ -410,6 +410,11 @@ export async function deleteMockRule(deviceId: string, ruleId: string): Promise<
   })
 }
 
+export async function deleteAllMockRules(deviceId: string): Promise<void> {
+  const rules = await getMockRules(deviceId)
+  await Promise.all(rules.map(rule => deleteMockRule(deviceId, rule.id)))
+}
+
 // ============================================================================
 // 导出 API
 // ============================================================================
@@ -474,6 +479,11 @@ export async function deleteBreakpointRule(deviceId: string, ruleId: string): Pr
   })
 }
 
+export async function deleteAllBreakpointRules(deviceId: string): Promise<void> {
+  const rules = await getBreakpointRules(deviceId)
+  await Promise.all(rules.map(rule => deleteBreakpointRule(deviceId, rule.id)))
+}
+
 export async function getPendingBreakpoints(deviceId: string): Promise<BreakpointHit[]> {
   return fetchJSON(`${API_BASE}/devices/${deviceId}/breakpoints/pending`)
 }
@@ -523,6 +533,11 @@ export async function deleteChaosRule(deviceId: string, ruleId: string): Promise
   await fetch(`${API_BASE}/devices/${deviceId}/chaos/${ruleId}`, {
     method: 'DELETE',
   })
+}
+
+export async function deleteAllChaosRules(deviceId: string): Promise<void> {
+  const rules = await getChaosRules(deviceId)
+  await Promise.all(rules.map(rule => deleteChaosRule(deviceId, rule.id)))
 }
 
 // ============================================================================

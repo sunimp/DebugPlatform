@@ -11,7 +11,8 @@ import { useDBStore } from '@/stores/dbStore'
 import { useProtobufStore } from '@/stores/protobufStore'
 import { ProtobufConfigPanel } from './ProtobufConfigPanel'
 import { BlobCell, isBase64Blob } from './BlobCell'
-import { LogIcon, LightningIcon, DatabaseIcon, WarningIcon, LockIcon, ArrowUpIcon, ArrowDownIcon, BackIcon, EditIcon, ClipboardIcon, PackageIcon } from './icons'
+import { ListLoadingOverlay } from './ListLoadingOverlay'
+import { LogIcon, LightningIcon, DatabaseIcon, WarningIcon, LockIcon, ArrowUpIcon, ArrowDownIcon, BackIcon, EditIcon, ClipboardIcon, PackageIcon, RefreshIcon } from './icons'
 
 interface DBInspectorProps {
     deviceId: string
@@ -405,7 +406,7 @@ export function DBInspector({ deviceId }: DBInspectorProps) {
                                 <button
                                     onClick={() => setShowProtobufConfig(!showProtobufConfig)}
                                     className={clsx(
-                                        'px-3 py-1.5 rounded text-xs transition-colors',
+                                        'px-3 py-1.5 rounded text-xs transition-colors flex items-center gap-1 whitespace-nowrap',
                                         showProtobufConfig
                                             ? 'bg-purple-500/20 text-purple-400'
                                             : descriptorMeta.length > 0
@@ -430,9 +431,9 @@ export function DBInspector({ deviceId }: DBInspectorProps) {
                                 <button
                                     onClick={() => selectedDb && selectedTable && loadTableData(deviceId, selectedDb, selectedTable)}
                                     disabled={dataLoading}
-                                    className="px-3 py-1.5 bg-bg-light text-text-secondary rounded text-xs hover:bg-bg-lighter transition-colors disabled:opacity-50"
+                                    className="px-3 py-1.5 bg-bg-light text-text-secondary rounded text-xs hover:bg-bg-lighter transition-colors disabled:opacity-50 flex items-center gap-1"
                                 >
-                                    🔄 刷新
+                                    <RefreshIcon size={12} className={dataLoading ? 'animate-spin' : ''} /> 刷新
                                 </button>
                             </div>
                         </div>
@@ -478,12 +479,11 @@ export function DBInspector({ deviceId }: DBInspectorProps) {
                         )}
 
                         {/* 表数据 */}
-                        <div className="flex-1 overflow-auto">
-                            {dataLoading ? (
-                                <div className="flex items-center justify-center h-full">
-                                    <div className="animate-spin w-6 h-6 border-2 border-primary border-t-transparent rounded-full" />
-                                </div>
-                            ) : tableData ? (
+                        <div className="flex-1 overflow-auto relative">
+                            {/* 刷新加载覆盖层 */}
+                            <ListLoadingOverlay isLoading={dataLoading} text="刷新表数据..." />
+
+                            {tableData ? (
                                 <table className="w-full text-xs">
                                     <thead className="sticky top-0 bg-bg-dark">
                                         <tr>

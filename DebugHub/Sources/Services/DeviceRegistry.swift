@@ -57,6 +57,26 @@ struct DeviceInfoDTO: Content {
     }
 }
 
+// MARK: - Connection Type
+
+/// 设备连接类型
+enum DeviceConnectionType {
+    /// 首次连接（该设备之前从未连接过或已确认断开）
+    case newConnection
+    /// 快速重连（设备断开后在延迟窗口内重连）
+    case quickReconnect
+    /// 重复连接（同一设备在已连接状态下再次发送注册请求）
+    case duplicateConnection
+}
+
+// MARK: - Registration Result
+
+/// 设备注册结果
+struct DeviceRegistrationResult {
+    let session: DeviceSession
+    let connectionType: DeviceConnectionType
+}
+
 // MARK: - Device Session
 
 final class DeviceSession {
@@ -127,8 +147,26 @@ final class DeviceRegistry: LifecycleHandler, @unchecked Sendable {
 
     // MARK: - Session Management
 
-    func register(deviceInfo: DeviceInfoDTO, webSocket: WebSocket, sessionId: String) -> DeviceSession {
+    func register(deviceInfo: DeviceInfoDTO, webSocket: WebSocket, sessionId: String) -> DeviceRegistrationResult {
         lock.lock()
+
+        // 检查是否为重复连接（同一设备已经在线）
+        if let existingSession = sessions[deviceInfo.deviceId] {
+            // 检查是否是同一个 WebSocket 连接
+            if ObjectIdentifier(existingSession.webSocket) == ObjectIdentifier(webSocket) {
+                // 完全相同的连接，忽略重复注册
+                lock.unlock()
+                print("[DeviceRegistry] Duplicate register from same connection for \(deviceInfo.deviceId) - ignored")
+                return DeviceRegistrationResult(session: existingSession, connectionType: .duplicateConnection)
+            }
+
+            // 不同的 WebSocket 连接，但设备 ID 相同
+            // 关闭旧连接，使用新连接（可能是客户端重启了）
+            print(
+                "[DeviceRegistry] Device \(deviceInfo.deviceId) reconnecting with new WebSocket, closing old connection"
+            )
+            existingSession.webSocket.close(code: .normalClosure, promise: nil)
+        }
 
         // 取消待处理的断开任务（设备快速重连）
         var isQuickReconnect = false
@@ -140,23 +178,29 @@ final class DeviceRegistry: LifecycleHandler, @unchecked Sendable {
         }
 
         let session = DeviceSession(deviceInfo: deviceInfo, webSocket: webSocket, sessionId: sessionId)
-        let isNewConnection = sessions[deviceInfo.deviceId] == nil
+        let isNewConnection = sessions[deviceInfo.deviceId] == nil && !isQuickReconnect
         sessions[deviceInfo.deviceId] = session
         lock.unlock()
 
-        // 快速重连：广播重连事件
+        // 确定连接类型
+        let connectionType: DeviceConnectionType
         if isQuickReconnect {
+            connectionType = .quickReconnect
+            // 快速重连：广播重连事件
             onDeviceReconnected?(deviceInfo.deviceId, deviceInfo.deviceName, sessionId)
-        }
-
-        // 只有新连接（非快速重连）才记录到数据库
-        if isNewConnection {
+        } else if isNewConnection {
+            connectionType = .newConnection
+            // 只有新连接才记录到数据库
             Task {
                 await self.recordSessionStart(deviceInfo: deviceInfo, sessionId: sessionId)
             }
+        } else {
+            // 替换了已存在的连接（上面的 existingSession != nil 分支）
+            connectionType = .quickReconnect
+            onDeviceReconnected?(deviceInfo.deviceId, deviceInfo.deviceName, sessionId)
         }
 
-        return session
+        return DeviceRegistrationResult(session: session, connectionType: connectionType)
     }
 
     func unregister(deviceId: String) {
@@ -205,9 +249,10 @@ final class DeviceRegistry: LifecycleHandler, @unchecked Sendable {
 
         // 1. 保存或更新设备信息
         do {
-            if let existingDevice = try await DeviceModel.query(on: db)
-                .filter(\.$deviceId == deviceInfo.deviceId)
-                .first() {
+            if
+                let existingDevice = try await DeviceModel.query(on: db)
+                    .filter(\.$deviceId == deviceInfo.deviceId)
+                    .first() {
                 // 更新现有设备信息
                 existingDevice.deviceName = deviceInfo.deviceName
                 existingDevice.deviceModel = deviceInfo.deviceModel
@@ -272,9 +317,10 @@ final class DeviceRegistry: LifecycleHandler, @unchecked Sendable {
             }
 
             // 更新设备最后活动时间
-            if let device = try await DeviceModel.query(on: db)
-                .filter(\.$deviceId == deviceId)
-                .first() {
+            if
+                let device = try await DeviceModel.query(on: db)
+                    .filter(\.$deviceId == deviceId)
+                    .first() {
                 device.lastSeenAt = Date()
                 try await device.save(on: db)
             }

@@ -52,17 +52,18 @@ final class EventIngestor: @unchecked Sendable {
         // 解析 Body Params
         var bodyParams: [String: String] = [:]
         if let body = event.request.body, !body.isEmpty {
-            let contentType = event.request.headers.first { $0.key.lowercased() == "content-type" }?.value.lowercased() ?? ""
+            let contentType = event.request.headers.first { $0.key.lowercased() == "content-type" }?.value
+                .lowercased() ?? ""
             if contentType.contains("application/json") {
                 bodyParams = flattenJSON(body)
             } else if contentType.contains("application/x-www-form-urlencoded") {
                 if let str = String(data: body, encoding: .utf8) {
-                     let components = URLComponents(string: "?" + str)
-                     if let items = components?.queryItems {
-                         for item in items {
-                             bodyParams[item.name] = item.value ?? ""
-                         }
-                     }
+                    let components = URLComponents(string: "?" + str)
+                    if let items = components?.queryItems {
+                        for item in items {
+                            bodyParams[item.name] = item.value ?? ""
+                        }
+                    }
                 }
             }
         }
@@ -91,7 +92,7 @@ final class EventIngestor: @unchecked Sendable {
         )
 
         try await model.save(on: db)
-        
+
         // 批量保存解析后的参数到关联表，用于搜索优化
         if !bodyParams.isEmpty {
             let paramModels = bodyParams.map { key, value in
@@ -104,7 +105,7 @@ final class EventIngestor: @unchecked Sendable {
             try await paramModels.create(on: db)
         }
     }
-    
+
     // MARK: - Helpers
 
     private func flattenJSON(_ data: Data) -> [String: String] {

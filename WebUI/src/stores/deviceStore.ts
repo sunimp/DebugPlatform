@@ -139,7 +139,16 @@ export const useDeviceStore = create<DeviceState>((set, get) => ({
     if (!currentDeviceId) return
 
     try {
+      // 清空设备数据（HTTP、日志、WebSocket 等）
       await api.clearDeviceData(currentDeviceId)
+
+      // 清空规则（Mock 规则、断点规则、故障注入规则）
+      await Promise.all([
+        api.deleteAllMockRules(currentDeviceId),
+        api.deleteAllBreakpointRules(currentDeviceId),
+        api.deleteAllChaosRules(currentDeviceId),
+      ])
+
       // 清除前端 store 状态（包括会话分隔符）
       useHTTPStore.getState().clearEvents()
       useLogStore.getState().clearEvents()

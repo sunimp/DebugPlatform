@@ -96,7 +96,9 @@ final class DebugBridgeHandler: @unchecked Sendable {
                         case .stats: statsCount += 1
                         }
                     }
-                    print("[DebugBridge] Received \(events.count) events from \(deviceId): http=\(httpCount), ws=\(wsCount), log=\(logCount), stats=\(statsCount)")
+                    print(
+                        "[DebugBridge] Received \(events.count) events from \(deviceId): http=\(httpCount), ws=\(wsCount), log=\(logCount), stats=\(statsCount)"
+                    )
                     handleEvents(events: events, deviceId: deviceId, req: req)
                 }
 
@@ -105,7 +107,7 @@ final class DebugBridgeHandler: @unchecked Sendable {
                     print("[DebugBridge] Received breakpoint hit from \(deviceId): requestId=\(hit.requestId)")
                     handleBreakpointHit(hit: hit, deviceId: deviceId)
                 }
-                
+
             case let .dbResponse(response):
                 print("[DebugBridge] Received DB response: requestId=\(response.requestId)")
                 DBResponseManager.shared.handleResponse(response)
@@ -137,26 +139,36 @@ final class DebugBridgeHandler: @unchecked Sendable {
         // 生成会话 ID
         let sessionId = UUID().uuidString
 
-        // 注册设备
-        let session = DeviceRegistry.shared.register(deviceInfo: deviceInfo, webSocket: ws, sessionId: sessionId)
+        // 注册设备（获取连接类型）
+        let result = DeviceRegistry.shared.register(deviceInfo: deviceInfo, webSocket: ws, sessionId: sessionId)
         deviceIdHolder.deviceId = deviceInfo.deviceId
 
         // 发送注册成功响应
         let response = BridgeMessageDTO.registered(sessionId: sessionId)
         sendMessage(ws: ws, message: response)
 
-        print("[DebugBridge] Device registered: \(deviceInfo.deviceName) (\(deviceInfo.deviceId))")
-
-        // 广播设备连接事件给 WebUI（只有首次连接才广播，快速重连不广播）
-        RealtimeStreamHandler.shared.broadcastDeviceConnected(
-            deviceId: deviceInfo.deviceId,
-            deviceName: deviceInfo.deviceName,
-            sessionId: sessionId
-        )
+        // 根据连接类型决定是否广播和日志
+        switch result.connectionType {
+        case .newConnection:
+            print("[DebugBridge] Device connected (new): \(deviceInfo.deviceName) (\(deviceInfo.deviceId))")
+            // 只有首次连接才广播 deviceConnected 事件
+            RealtimeStreamHandler.shared.broadcastDeviceConnected(
+                deviceId: deviceInfo.deviceId,
+                deviceName: deviceInfo.deviceName,
+                sessionId: sessionId
+            )
+        case .quickReconnect:
+            print("[DebugBridge] Device reconnected (quick): \(deviceInfo.deviceName) (\(deviceInfo.deviceId))")
+        // 快速重连会由 DeviceRegistry 广播 deviceReconnected 事件，这里不再广播
+        case .duplicateConnection:
+            print("[DebugBridge] Device duplicate register ignored: \(deviceInfo.deviceName) (\(deviceInfo.deviceId))")
+            // 重复连接不广播任何事件
+            return
+        }
 
         // 发送当前的规则
         Task {
-            await sendCurrentRules(to: deviceInfo.deviceId, session: session, db: req.db)
+            await sendCurrentRules(to: deviceInfo.deviceId, session: result.session, db: req.db)
         }
     }
 
@@ -170,6 +182,15 @@ final class DebugBridgeHandler: @unchecked Sendable {
     }
 
     private func handleEvents(events: [DebugEventDTO], deviceId: String, req: Request) {
+        // 调试日志：检查接收到的 Mock 事件
+        for event in events {
+            if case let .http(httpEvent) = event, httpEvent.isMocked {
+                print(
+                    "[DebugBridge] Received mocked HTTP event: url=\(httpEvent.request.url.prefix(80))..., isMocked=\(httpEvent.isMocked)"
+                )
+            }
+        }
+
         // 异步处理事件入库
         Task {
             await EventIngestor.shared.ingest(events: events, deviceId: deviceId, db: req.db)
@@ -182,7 +203,7 @@ final class DebugBridgeHandler: @unchecked Sendable {
     private func handleBreakpointHit(hit: BreakpointHitDTO, deviceId: String) {
         // 添加到 pending hits
         BreakpointManager.shared.addPendingHit(hit)
-        
+
         // 广播给 WebUI
         RealtimeStreamHandler.shared.broadcastBreakpointHit(hit, deviceId: deviceId)
     }

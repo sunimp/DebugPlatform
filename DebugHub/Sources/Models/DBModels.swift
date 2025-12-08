@@ -74,7 +74,11 @@ final class HTTPEventModel: Model, Content, @unchecked Sendable {
     @Field(key: "is_favorite")
     var isFavorite: Bool
 
-    init() {}
+    init() {
+        // Fluent 需要一个空的初始化器
+        // 非 Optional Bool 类型需要默认值
+        // 注意：这些值会被 Fluent 从数据库读取的值覆盖
+    }
 
     init(
         id: String,

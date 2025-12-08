@@ -38,7 +38,11 @@ struct HTTPEventController: RouteCollection {
         let method = req.query[String.self, at: "method"]
         let statusCode = req.query[Int.self, at: "statusCode"]
         let urlContains = req.query[String.self, at: "urlContains"]
-        let isMocked = req.query[Bool.self, at: "isMocked"]
+        // 注意：Vapor 的 Bool 解码可能会将缺失的参数解析为 false
+        // 所以我们需要先检查原始查询字符串
+        let isMocked: Bool? = req.url.query?.contains("isMocked=") == true
+            ? req.query[Bool.self, at: "isMocked"]
+            : nil
         let timeFrom = req.query[Date.self, at: "timeFrom"]
         let timeTo = req.query[Date.self, at: "timeTo"]
         let minDuration = req.query[Double.self, at: "minDuration"]
@@ -101,6 +105,7 @@ struct HTTPEventController: RouteCollection {
                 startTime: event.startTime,
                 duration: event.duration,
                 isMocked: event.isMocked,
+                mockRuleId: event.mockRuleId,
                 errorDescription: event.errorDescription,
                 traceId: event.traceId,
                 isFavorite: event.isFavorite
@@ -241,11 +246,11 @@ struct HTTPEventController: RouteCollection {
 
         let queryItems = (try? decoder.decode([String: String].self, from: Data(event.queryItems.utf8))) ?? [:]
         let requestHeaders = (try? decoder.decode([String: String].self, from: Data(event.requestHeaders.utf8))) ?? [:]
-        
+
         let bodyParams: [String: String]? = event.bodyParams.flatMap {
             try? decoder.decode([String: String].self, from: Data($0.utf8))
         }
-        
+
         let responseHeaders: [String: String]? = event.responseHeaders.flatMap {
             try? decoder.decode([String: String].self, from: Data($0.utf8))
         }
@@ -458,6 +463,7 @@ struct HTTPEventSummaryDTO: Content {
     let startTime: Date
     let duration: Double?
     let isMocked: Bool
+    let mockRuleId: String?
     let errorDescription: String?
     let traceId: String?
     let isFavorite: Bool

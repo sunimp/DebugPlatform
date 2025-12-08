@@ -8,16 +8,24 @@ interface MockRuleEditorProps {
   onClose: () => void
   onSave: (rule: Omit<MockRule, 'id' | 'deviceId' | 'createdAt' | 'updatedAt'>) => void
   loading?: boolean
+  /** 是否仅显示 HTTP 相关选项，默认 false */
+  httpOnly?: boolean
 }
 
-const targetTypeOptions: { value: MockTargetType; label: string; description: string }[] = [
+const allTargetTypeOptions: { value: MockTargetType; label: string; description: string }[] = [
   { value: 'httpRequest', label: 'HTTP 请求', description: '修改发出的请求' },
   { value: 'httpResponse', label: 'HTTP 响应', description: '模拟或修改响应' },
   { value: 'wsOutgoing', label: 'WebSocket 发送', description: '修改发送的 WS 消息' },
   { value: 'wsIncoming', label: 'WebSocket 接收', description: '修改接收的 WS 消息' },
 ]
 
-export function MockRuleEditor({ rule, isOpen, onClose, onSave, loading }: MockRuleEditorProps) {
+const httpTargetTypeOptions: { value: MockTargetType; label: string; description: string }[] = [
+  { value: 'httpRequest', label: 'HTTP 请求', description: '修改发出的请求' },
+  { value: 'httpResponse', label: 'HTTP 响应', description: '模拟或修改响应' },
+]
+
+export function MockRuleEditor({ rule, isOpen, onClose, onSave, loading, httpOnly = false }: MockRuleEditorProps) {
+  const targetTypeOptions = httpOnly ? httpTargetTypeOptions : allTargetTypeOptions
   const isEdit = !!rule
   const initialData = rule || createEmptyRule()
 
@@ -118,7 +126,7 @@ export function MockRuleEditor({ rule, isOpen, onClose, onSave, loading }: MockR
   const isResponse = targetType === 'httpResponse'
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center">
+    <div className="fixed inset-0 z-[200] flex items-center justify-center">
       {/* Backdrop */}
       <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={onClose} />
 

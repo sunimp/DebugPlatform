@@ -406,11 +406,24 @@ export function DeviceDetailPage() {
   }, [toggleDatabaseInspector])
 
   const handleClearDeviceData = useCallback(async () => {
+    // 暂停 WebSocket 重连，避免清空数据后持续重连
+    realtimeService.pauseReconnect()
+
     await clearDeviceData()
+
+    // 清空前端数据状态
     httpStore.clearEvents()
     logStore.clearEvents()
     wsStore.clearSessions()
+
+    // 清空前端规则状态
+    mockStore.clearRules()
+    breakpointStore.clear()
+
     setShowClearDeviceDialog(false)
+
+    // 恢复 WebSocket 连接
+    realtimeService.resumeReconnect()
   }, [clearDeviceData])
 
   const handleSelectHTTPEvent = useCallback(
@@ -753,6 +766,7 @@ function HTTPTab({
         <HTTPRequestsContent
           deviceId={deviceId}
           httpStore={httpStore}
+          mockStore={mockStore}
           onSelectEvent={onSelectEvent}
           onShowRelatedLogs={onShowRelatedLogs}
           onFavoriteChange={onFavoriteChange}
@@ -792,6 +806,7 @@ function HTTPTab({
 function HTTPRequestsContent({
   deviceId,
   httpStore,
+  mockStore,
   onSelectEvent,
   onShowRelatedLogs,
   onFavoriteChange,
@@ -804,6 +819,7 @@ function HTTPRequestsContent({
 }: {
   deviceId: string
   httpStore: ReturnType<typeof useHTTPStore.getState>
+  mockStore: ReturnType<typeof useMockStore.getState>
   onSelectEvent: (id: string) => void
   onShowRelatedLogs: (traceId: string) => void
   onFavoriteChange: (eventId: string, isFavorite: boolean) => void
@@ -1097,6 +1113,10 @@ function HTTPRequestsContent({
               isSelectMode={httpStore.isSelectMode}
               selectedIds={httpStore.selectedIds}
               onToggleSelect={httpStore.toggleSelectId}
+              mockRules={mockStore.rules}
+              onEditMockRule={(rule) => {
+                mockStore.openEditor(rule)
+              }}
             />
           ) : (
             <GroupedHTTPEventList
@@ -1119,6 +1139,13 @@ function HTTPRequestsContent({
             deviceId={deviceId}
             onShowRelatedLogs={onShowRelatedLogs}
             onFavoriteChange={onFavoriteChange}
+            mockRules={mockStore.rules}
+            onEditMockRule={(rule) => {
+              mockStore.openEditor(rule)
+            }}
+            onCreateMockFromRequest={(url, method, responseBody, responseHeaders) => {
+              mockStore.openEditorWithTemplate({ url, method, responseBody, responseHeaders })
+            }}
           />
         </div>
       </div>
@@ -1133,6 +1160,23 @@ function HTTPRequestsContent({
         confirmText="确认删除"
         cancelText="取消"
         type="danger"
+      />
+
+      {/* Mock Rule Editor Modal - 用于在请求列表中直接编辑 Mock 规则 */}
+      <MockRuleEditor
+        rule={mockStore.editingRule}
+        isOpen={mockStore.isEditorOpen}
+        onClose={mockStore.closeEditor}
+        onSave={async (ruleData) => {
+          // 判断是编辑还是创建：检查 editingRule 是否有有效的 id
+          if (mockStore.editingRule?.id) {
+            await mockStore.updateRule(deviceId, mockStore.editingRule.id, ruleData)
+          } else {
+            await mockStore.createRule(deviceId, ruleData)
+          }
+        }}
+        loading={mockStore.loading}
+        httpOnly={true}
       />
     </>
   )
@@ -1957,6 +2001,7 @@ function MockTab({
         onClose={mockStore.closeEditor}
         onSave={handleSave}
         loading={mockStore.loading}
+        httpOnly
       />
     </div>
   )

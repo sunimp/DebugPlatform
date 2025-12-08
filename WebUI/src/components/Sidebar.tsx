@@ -251,7 +251,7 @@ export function Sidebar() {
         </div>
 
         {/* Device List Section */}
-        <div className="px-3 py-4">
+        <div className="px-3 pt-4 pb-3">
           <div className="px-2 mb-3 text-xs font-semibold text-text-secondary uppercase tracking-wider flex justify-between items-center">
             <button
               onClick={() => navigate('/')}
@@ -399,9 +399,9 @@ export function Sidebar() {
           </div>
         </div>
 
-        {/* Separator */}
+        {/* Separator - 与侧边栏同宽，紧贴设备列表 */}
         {currentDeviceId && (currentTab === 'http' || currentTab === 'websocket') && (
-          <div className="divider mx-5 my-2" />
+          <div className="h-px bg-border" />
         )}
 
         {/* Domain/Host List Section (Only for HTTP/WebSocket tabs) */}

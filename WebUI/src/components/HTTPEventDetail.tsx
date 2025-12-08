@@ -1,16 +1,18 @@
 import { useState } from 'react'
-import type { HTTPEventDetail as HTTPEventDetailType } from '@/types'
+import type { HTTPEventDetail as HTTPEventDetailType, MockRule } from '@/types'
 import {
   formatDuration,
   getStatusClass,
   getMethodClass,
   decodeBase64,
 } from '@/utils/format'
-import { getHTTPEventCurl, replayHTTPEvent, toggleFavorite } from '@/services/api'
+import { getHTTPEventCurl, replayHTTPEvent } from '@/services/api'
 import { JSONViewer } from './JSONTree'
 import { TimingWaterfall } from './TimingWaterfall'
 import { ImagePreview, isImageContentType } from './ImagePreview'
 import { ProtobufViewer, isProtobufContentType } from './ProtobufViewer'
+import { MockRulePopover } from './MockRulePopover'
+import { useFavoriteUrlStore } from '@/stores/favoriteUrlStore'
 import clsx from 'clsx'
 import { MockIcon, ClipboardIcon, CheckIcon, ArrowPathIcon } from './icons'
 
@@ -19,6 +21,12 @@ interface Props {
   deviceId: string
   onShowRelatedLogs?: (traceId: string) => void
   onFavoriteChange?: (eventId: string, isFavorite: boolean) => void
+  /** Mock 规则列表，用于点击 Mock 标记时显示匹配的规则 */
+  mockRules?: MockRule[]
+  /** 点击编辑 Mock 规则 */
+  onEditMockRule?: (rule: MockRule) => void
+  /** 基于当前请求创建 Mock 规则 */
+  onCreateMockFromRequest?: (url: string, method: string, responseBody?: string, responseHeaders?: Record<string, string>) => void
 }
 
 export function HTTPEventDetail({
@@ -26,19 +34,19 @@ export function HTTPEventDetail({
   deviceId,
   onShowRelatedLogs,
   onFavoriteChange,
+  mockRules = [],
+  onEditMockRule,
+  onCreateMockFromRequest,
 }: Props) {
   const [activeTab, setActiveTab] = useState<'headers' | 'params' | 'body' | 'timing'>('headers')
   const [curlCommand, setCurlCommand] = useState<string | null>(null)
   const [curlLoading, setCurlLoading] = useState(false)
   const [curlCopied, setCurlCopied] = useState(false)
   const [replayStatus, setReplayStatus] = useState<string | null>(null)
-  const [isFavorite, setIsFavorite] = useState(event?.isFavorite ?? false)
-  const [favoriteLoading, setFavoriteLoading] = useState(false)
 
-  // 当 event 变化时更新 isFavorite 状态
-  if (event && event.isFavorite !== isFavorite && !favoriteLoading) {
-    setIsFavorite(event.isFavorite)
-  }
+  // 使用 URL 级别的收藏状态
+  const { isFavorite: isUrlFavorite, toggleFavorite: toggleUrlFavorite } = useFavoriteUrlStore()
+  const isFavorite = event ? isUrlFavorite(deviceId, event.url) : false
 
   if (!event) {
     return (
@@ -95,17 +103,10 @@ export function HTTPEventDetail({
     }
   }
 
-  const handleToggleFavorite = async () => {
-    setFavoriteLoading(true)
-    try {
-      const response = await toggleFavorite(deviceId, event.id)
-      setIsFavorite(response.isFavorite)
-      onFavoriteChange?.(event.id, response.isFavorite)
-    } catch (error) {
-      console.error('Failed to toggle favorite:', error)
-    } finally {
-      setFavoriteLoading(false)
-    }
+  const handleToggleFavorite = () => {
+    if (!event) return
+    const newState = toggleUrlFavorite(deviceId, event.url)
+    onFavoriteChange?.(event.id, newState)
   }
 
   return (
@@ -116,14 +117,13 @@ export function HTTPEventDetail({
           <h3 className="text-sm font-medium break-all flex-1">{event.url}</h3>
           <button
             onClick={handleToggleFavorite}
-            disabled={favoriteLoading}
             className={clsx(
               'ml-2 p-1.5 rounded transition-colors',
               isFavorite
                 ? 'text-yellow-400 hover:text-yellow-300'
                 : 'text-text-muted hover:text-yellow-400'
             )}
-            title={isFavorite ? '取消收藏' : '收藏'}
+            title={isFavorite ? '取消收藏（URL 级别）' : '收藏（URL 级别）'}
           >
             {isFavorite ? (
               <StarFilledIcon className="w-5 h-5" />
@@ -151,9 +151,16 @@ export function HTTPEventDetail({
           </span>
           <span className="text-text-muted">{formatDuration(event.duration)}</span>
           {event.isMocked && (
-            <span className="px-1.5 py-0.5 rounded bg-yellow-500/20 text-yellow-400 flex items-center">
-              <MockIcon size={12} className="mr-1" /> Mocked
-            </span>
+            <MockRulePopover
+              url={event.url}
+              mockRuleId={event.mockRuleId}
+              rules={mockRules}
+              onEditRule={onEditMockRule}
+            >
+              <span className="px-1.5 py-0.5 rounded bg-yellow-500/20 text-yellow-400 flex items-center cursor-pointer hover:bg-yellow-500/30 transition-colors">
+                <MockIcon size={12} className="mr-1" /> Mocked
+              </span>
+            </MockRulePopover>
           )}
           {event.timing?.protocolName && (
             <span className="px-1.5 py-0.5 rounded bg-primary/20 text-primary">
@@ -168,7 +175,7 @@ export function HTTPEventDetail({
         </div>
 
         {/* Action buttons */}
-        <div className="flex gap-2">
+        <div className="flex flex-wrap gap-2">
           <button
             onClick={handleCopyCurl}
             disabled={curlLoading}
@@ -183,6 +190,19 @@ export function HTTPEventDetail({
           >
             {replayStatus || <><ArrowPathIcon size={12} className="mr-1" /> 重放请求</>}
           </button>
+          {onCreateMockFromRequest && (
+            <button
+              onClick={() => onCreateMockFromRequest(
+                event.url,
+                event.method,
+                event.responseBody ?? undefined,
+                event.responseHeaders ?? undefined
+              )}
+              className="px-3 py-1.5 bg-purple-500/20 border border-purple-500/30 text-purple-400 rounded text-xs hover:bg-purple-500/30 transition-colors flex items-center"
+            >
+              <MockIcon size={12} className="mr-1" /> 创建 Mock 规则
+            </button>
+          )}
         </div>
 
         {/* TraceId */}

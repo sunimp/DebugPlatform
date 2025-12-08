@@ -7,9 +7,10 @@
 
 import { useRef, useEffect, useCallback, useMemo } from 'react'
 import { useVirtualizer } from '@tanstack/react-virtual'
-import type { HTTPEventSummary, TrafficRule } from '@/types'
+import type { HTTPEventSummary, TrafficRule, MockRule } from '@/types'
 import { type ListItem, isSessionDivider } from '@/stores/httpStore'
 import { useRuleStore } from '@/stores/ruleStore'
+import { useFavoriteUrlStore } from '@/stores/favoriteUrlStore'
 import {
     formatSmartTime,
     formatDuration,
@@ -21,6 +22,7 @@ import {
 } from '@/utils/format'
 import clsx from 'clsx'
 import { MockIcon, StarIcon, HttpIcon, TagIcon } from './icons'
+import { MockRulePopover } from './MockRulePopover'
 
 // 行高度（像素）
 const ROW_HEIGHT = 56
@@ -36,6 +38,10 @@ interface Props {
     isSelectMode?: boolean
     selectedIds?: Set<string>
     onToggleSelect?: (id: string) => void
+    /** Mock 规则列表，用于点击 Mock 标记时显示匹配的规则 */
+    mockRules?: MockRule[]
+    /** 点击编辑 Mock 规则 */
+    onEditMockRule?: (rule: MockRule) => void
 }
 
 /**
@@ -77,12 +83,17 @@ export function VirtualHTTPEventTable({
     isSelectMode = false,
     selectedIds = new Set(),
     onToggleSelect,
+    mockRules = [],
+    onEditMockRule,
 }: Props) {
     const parentRef = useRef<HTMLDivElement>(null)
     const lastFirstItemRef = useRef<string | null>(null)
 
     // 获取规则
     const { deviceRules, rules, fetchDeviceRules, fetchRules } = useRuleStore()
+
+    // 获取 URL 级别收藏状态
+    const { isFavorite: isUrlFavorite } = useFavoriteUrlStore()
 
     // 加载规则
     useEffect(() => {
@@ -157,6 +168,9 @@ export function VirtualHTTPEventTable({
         const isError = !event.statusCode || event.statusCode >= 400
         const isSelected = event.id === selectedId
         const isChecked = selectedIds.has(event.id)
+
+        // 使用 URL 级别的收藏状态（优先于请求级别的状态）
+        const isFavorite = deviceId ? isUrlFavorite(deviceId, event.url) : event.isFavorite
 
         // 检查是否匹配规则（用于高亮/标记）
         const matchedRule = matchEventRule(event, applicableRules)
@@ -273,16 +287,23 @@ export function VirtualHTTPEventTable({
                 {/* Tags */}
                 <div className="px-4 py-3.5 w-[80px] flex-shrink-0 flex items-center justify-center gap-2">
                     {event.isMocked && (
-                        <span className="inline-flex items-center justify-center w-7 h-7 rounded-lg bg-purple-500/15 text-purple-400 shadow-sm shadow-purple-500/10" title="已 Mock">
-                            <MockIcon size={14} />
-                        </span>
+                        <MockRulePopover
+                            url={event.url}
+                            mockRuleId={event.mockRuleId}
+                            rules={mockRules}
+                            onEditRule={onEditMockRule}
+                        >
+                            <span className="inline-flex items-center justify-center w-7 h-7 rounded-lg bg-purple-500/15 text-purple-400 shadow-sm shadow-purple-500/10 hover:bg-purple-500/25 transition-colors cursor-pointer" title="已 Mock - 点击查看规则">
+                                <MockIcon size={14} />
+                            </span>
+                        </MockRulePopover>
                     )}
-                    {event.isFavorite && (
+                    {isFavorite && (
                         <span className="badge-favorite text-base" title="已收藏">
                             <StarIcon size={14} filled />
                         </span>
                     )}
-                    {!event.isMocked && !event.isFavorite && (
+                    {!event.isMocked && !isFavorite && (
                         <span className="w-7 h-7" />
                     )}
                 </div>

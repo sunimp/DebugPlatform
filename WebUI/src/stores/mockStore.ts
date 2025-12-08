@@ -19,6 +19,12 @@ interface MockStore {
   deleteRule: (deviceId: string, ruleId: string) => Promise<void>
   toggleRuleEnabled: (deviceId: string, ruleId: string) => Promise<void>
   openEditor: (rule?: MockRule) => void
+  openEditorWithTemplate: (template: {
+    url: string
+    method?: string
+    responseBody?: string
+    responseHeaders?: Record<string, string>
+  }) => void
   closeEditor: () => void
   clearRules: () => void
 }
@@ -146,6 +152,60 @@ export const useMockStore = create<MockStore>((set, get) => ({
     set({
       isEditorOpen: true,
       editingRule: rule || null,
+    })
+  },
+
+  /**
+   * 基于请求创建预填充的 Mock 规则模板并打开编辑器
+   */
+  openEditorWithTemplate: (template: {
+    url: string
+    method?: string
+    responseBody?: string
+    responseHeaders?: Record<string, string>
+  }) => {
+    // 从 URL 提取路径模式
+    let urlPattern = template.url
+    try {
+      const parsed = new URL(template.url)
+      // 使用路径作为匹配模式，添加通配符前缀
+      urlPattern = `*${parsed.pathname}*`
+    } catch {
+      // 无法解析的 URL，使用原值
+    }
+
+    const templateRule: MockRule = {
+      id: '', // 新规则没有 ID
+      deviceId: null,
+      name: `Mock ${template.method || 'GET'} ${urlPattern}`,
+      targetType: 'httpResponse',
+      condition: {
+        urlPattern,
+        method: template.method || null,
+        statusCode: null,
+        headerContains: null,
+        bodyContains: null,
+        wsPayloadContains: null,
+        enabled: true,
+      },
+      action: {
+        modifyRequestHeaders: null,
+        modifyRequestBody: null,
+        mockResponseStatusCode: 200,
+        mockResponseHeaders: template.responseHeaders || { 'Content-Type': 'application/json' },
+        mockResponseBody: template.responseBody || null,
+        mockWebSocketPayload: null,
+        delayMilliseconds: null,
+      },
+      priority: 0,
+      enabled: true,
+      createdAt: null,
+      updatedAt: null,
+    }
+
+    set({
+      isEditorOpen: true,
+      editingRule: templateRule,
     })
   },
 

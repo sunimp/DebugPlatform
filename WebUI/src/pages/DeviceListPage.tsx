@@ -1,13 +1,16 @@
 import { useEffect, useState, useMemo } from 'react'
 import { useDeviceStore } from '@/stores/deviceStore'
+import { useConnectionStore } from '@/stores/connectionStore'
 import { DeviceCard } from '@/components/DeviceCard'
-import { RefreshIcon, IPhoneIcon, ClearIcon } from '@/components/icons'
+import { ListLoadingOverlay } from '@/components/ListLoadingOverlay'
+import { RefreshIcon, IPhoneIcon, ClearIcon, XIcon, OnlineIcon, PackageIcon } from '@/components/icons'
 import clsx from 'clsx'
 
 type FilterType = 'all' | 'online' | 'offline'
 
 export function DeviceListPage() {
   const { devices, isLoading, fetchDevices, removeAllOfflineDevices } = useDeviceStore()
+  const { isServerOnline } = useConnectionStore()
   const [filter, setFilter] = useState<FilterType>('all')
 
   const onlineCount = devices.filter(d => d.isOnline).length
@@ -112,16 +115,18 @@ export function DeviceListPage() {
         </div>
       </header>
 
-      {/* Content - 加载时添加闪烁效果 */}
-      <div className={clsx(
-        "flex-1 overflow-auto p-6 transition-opacity duration-300",
-        isLoading && "opacity-70"
-      )}>
-        {filteredDevices.length > 0 ? (
-          <div className={clsx(
-            "grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4",
-            isLoading && "animate-pulse"
-          )}>
+      {/* Content */}
+      <div className="flex-1 overflow-auto p-6 relative">
+        {/* 刷新加载覆盖层 - 仅在有设备时显示 */}
+        {filteredDevices.length > 0 && isServerOnline && (
+          <ListLoadingOverlay isLoading={isLoading} text="刷新设备列表..." />
+        )}
+
+        {/* 服务未启动时显示服务状态 */}
+        {!isServerOnline ? (
+          <ServerOfflineState onRetry={fetchDevices} isLoading={isLoading} />
+        ) : filteredDevices.length > 0 ? (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
             {filteredDevices.map((device, index) => (
               <DeviceCard
                 key={device.deviceId}
@@ -185,6 +190,86 @@ function EmptyState({ isLoading, filter, totalCount }: { isLoading: boolean; fil
             </div>
           </>
         )}
+      </div>
+    </div>
+  )
+}
+
+// 服务离线状态组件
+function ServerOfflineState({ onRetry, isLoading }: { onRetry: () => void; isLoading: boolean }) {
+  return (
+    <div className="flex flex-col items-center justify-center h-full">
+      {/* Background effects */}
+      <div className="fixed inset-0 pointer-events-none">
+        <div className="absolute top-1/4 left-1/4 w-96 h-96 bg-red-500/5 rounded-full blur-3xl" />
+        <div className="absolute bottom-1/4 right-1/4 w-96 h-96 bg-accent-blue/5 rounded-full blur-3xl" />
+      </div>
+
+      <div className="max-w-lg w-full relative">
+        <div className="glass-card p-10 text-center">
+          {/* Status Icon */}
+          <div className="w-28 h-28 mx-auto mb-8 rounded-full flex items-center justify-center text-5xl relative bg-red-500/10">
+            {/* Pulse ring */}
+            <div
+              className="absolute inset-0 rounded-full animate-ping opacity-25 bg-red-500"
+              style={{ animationDuration: '2s' }}
+            />
+            {/* Icon */}
+            <span className="relative z-10">
+              <XIcon size={48} />
+            </span>
+          </div>
+
+          {/* Title */}
+          <h1 className="text-3xl font-bold mb-3 text-red-400">
+            服务未启动
+          </h1>
+          <p className="text-text-secondary mb-10">
+            无法连接到 Debug Hub 服务
+          </p>
+
+          {/* Info Grid */}
+          <div className="grid grid-cols-2 gap-4 mb-10">
+            <div className="bg-bg-medium/50 rounded-xl p-4 border border-red-500/30 transition-all">
+              <div className="flex items-center gap-2 mb-2">
+                <OnlineIcon size={16} />
+                <span className="text-xs text-text-muted uppercase tracking-wider">状态</span>
+              </div>
+              <div className="text-xl font-semibold text-red-400">
+                OFFLINE
+              </div>
+            </div>
+            <div className="bg-bg-medium/50 rounded-xl p-4 border border-border transition-all">
+              <div className="flex items-center gap-2 mb-2">
+                <PackageIcon size={16} />
+                <span className="text-xs text-text-muted uppercase tracking-wider">服务</span>
+              </div>
+              <div className="text-xl font-semibold text-primary">
+                Debug Hub
+              </div>
+            </div>
+          </div>
+
+          {/* Hint */}
+          <div className="text-xs text-text-muted mb-8 p-3 bg-bg-medium/50 rounded-xl">
+            <span className="opacity-70">提示:</span>
+            <span className="ml-2 text-text-secondary">
+              请确保 Debug Hub 服务已启动并运行在正确的端口上
+            </span>
+          </div>
+
+          {/* Retry Button */}
+          <button
+            onClick={onRetry}
+            disabled={isLoading}
+            className="btn btn-primary flex items-center gap-2 mx-auto"
+          >
+            <span className={isLoading ? 'animate-spin' : ''}>
+              <RefreshIcon size={16} />
+            </span>
+            <span>{isLoading ? '连接中...' : '重试连接'}</span>
+          </button>
+        </div>
       </div>
     </div>
   )

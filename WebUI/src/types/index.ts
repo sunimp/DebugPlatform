@@ -54,6 +54,7 @@ export interface HTTPEventSummary {
   startTime: string
   duration: number | null
   isMocked: boolean
+  mockRuleId: string | null
   errorDescription: string | null
   traceId: string | null
   isFavorite: boolean

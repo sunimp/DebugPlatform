@@ -2,6 +2,7 @@ import { create } from 'zustand'
 import type { HTTPEventSummary, HTTPEventDetail } from '@/types'
 import * as api from '@/services/api'
 import { useRuleStore } from './ruleStore'
+import { useFavoriteUrlStore } from './favoriteUrlStore'
 
 // 分组模式
 export type GroupMode = 'none' | 'domain' | 'path'
@@ -33,6 +34,7 @@ interface HTTPState {
   isLoading: boolean
   autoScroll: boolean
   currentSessionId: string | null
+  currentDeviceId: string | null // 当前设备 ID，用于收藏过滤
 
   // 分组模式
   groupMode: GroupMode
@@ -82,7 +84,10 @@ interface HTTPState {
 }
 
 // 过滤逻辑 - 现在只处理 HTTP 事件，不再包含会话分隔符
-function filterItems(items: ListItem[], filters: HTTPState['filters']): ListItem[] {
+function filterItems(items: ListItem[], filters: HTTPState['filters'], deviceId?: string): ListItem[] {
+  // 获取 URL 级别收藏检查函数
+  const isUrlFavorite = useFavoriteUrlStore.getState().isFavorite
+
   return items.filter((item) => {
     // 跳过会话分隔符（如果有的话，保持向后兼容）
     if (isSessionDivider(item)) {
@@ -108,8 +113,11 @@ function filterItems(items: ListItem[], filters: HTTPState['filters']): ListItem
     // 仅 Mock
     if (filters.mockedOnly && !event.isMocked) return false
 
-    // 仅收藏
-    if (filters.favoritesOnly && !event.isFavorite) return false
+    // 仅收藏 - 使用 URL 级别的收藏状态
+    if (filters.favoritesOnly) {
+      const isFavorite = deviceId ? isUrlFavorite(deviceId, event.url) : event.isFavorite
+      if (!isFavorite) return false
+    }
 
     // 域名过滤（支持多选）
     if (filters.domains && filters.domains.length > 0) {
@@ -149,6 +157,7 @@ export const useHTTPStore = create<HTTPState>((set, get) => ({
   selectedIds: new Set(),
   isSelectMode: false,
   currentSessionId: null,
+  currentDeviceId: null,
   groupMode: 'none' as GroupMode,
 
   filters: {
@@ -163,8 +172,7 @@ export const useHTTPStore = create<HTTPState>((set, get) => ({
 
   fetchEvents: async (deviceId: string) => {
     const { pageSize, filters } = get()
-    set({ isLoading: true })
-
+    set({ isLoading: true, currentDeviceId: deviceId })
     try {
       const response = await api.getHTTPEvents(deviceId, {
         pageSize,
@@ -173,14 +181,9 @@ export const useHTTPStore = create<HTTPState>((set, get) => ({
         isMocked: filters.mockedOnly ? true : undefined,
       })
 
-      let events = response.items
+      const events = response.items
 
-      // 客户端过滤收藏（如果后端不支持）
-      if (filters.favoritesOnly) {
-        events = events.filter((e) => e.isFavorite)
-      }
-
-      const filteredItems = filterItems(events, filters)
+      const filteredItems = filterItems(events, filters, deviceId)
       set({
         events,
         listItems: events, // 从 API 加载时不包含分隔符
@@ -204,6 +207,12 @@ export const useHTTPStore = create<HTTPState>((set, get) => ({
   },
 
   selectEvent: async (deviceId: string, eventId: string) => {
+    // 如果 eventId 为空，清除选中
+    if (!eventId) {
+      set({ selectedEventId: null, selectedEvent: null })
+      return
+    }
+
     set({ selectedEventId: eventId })
 
     try {
@@ -222,7 +231,7 @@ export const useHTTPStore = create<HTTPState>((set, get) => ({
     set((state) => {
       const events = [event, ...state.events].slice(0, 1000)
       const listItems = [event as ListItem, ...state.listItems].slice(0, 1000)
-      const filteredItems = filterItems(listItems, state.filters)
+      const filteredItems = filterItems(listItems, state.filters, state.currentDeviceId ?? undefined)
       return { events, listItems, filteredItems, total: state.total + 1 }
     })
   },
@@ -248,7 +257,7 @@ export const useHTTPStore = create<HTTPState>((set, get) => ({
   setFilter: (key: string, value: string | boolean | string[]) => {
     set((state) => {
       const newFilters = { ...state.filters, [key]: value }
-      const filteredItems = filterItems(state.listItems, newFilters)
+      const filteredItems = filterItems(state.listItems, newFilters, state.currentDeviceId ?? undefined)
       return { filters: newFilters, filteredItems }
     })
   },
@@ -260,7 +269,7 @@ export const useHTTPStore = create<HTTPState>((set, get) => ({
         ? currentDomains.filter((d) => d !== domain)
         : [...currentDomains, domain]
       const newFilters = { ...state.filters, domains: newDomains }
-      const filteredItems = filterItems(state.listItems, newFilters)
+      const filteredItems = filterItems(state.listItems, newFilters, state.currentDeviceId ?? undefined)
       return { filters: newFilters, filteredItems }
     })
   },
@@ -268,14 +277,14 @@ export const useHTTPStore = create<HTTPState>((set, get) => ({
   clearDomains: () => {
     set((state) => {
       const newFilters = { ...state.filters, domains: [] }
-      const filteredItems = filterItems(state.listItems, newFilters)
+      const filteredItems = filterItems(state.listItems, newFilters, state.currentDeviceId ?? undefined)
       return { filters: newFilters, filteredItems }
     })
   },
 
   applyFilters: () => {
     set((state) => ({
-      filteredItems: filterItems(state.listItems, state.filters),
+      filteredItems: filterItems(state.listItems, state.filters, state.currentDeviceId ?? undefined),
     }))
   },
 
@@ -293,7 +302,7 @@ export const useHTTPStore = create<HTTPState>((set, get) => ({
       const listItems = state.listItems.map((item) =>
         !isSessionDivider(item) && item.id === eventId ? { ...item, isFavorite } : item
       )
-      const filteredItems = filterItems(listItems, state.filters)
+      const filteredItems = filterItems(listItems, state.filters, state.currentDeviceId ?? undefined)
       return {
         events,
         listItems,
@@ -358,24 +367,27 @@ export const useHTTPStore = create<HTTPState>((set, get) => ({
   },
 
   batchFavorite: async (deviceId: string, isFavorite: boolean) => {
-    const { selectedIds, events, listItems, filters } = get()
+    const { selectedIds, events, listItems, filters, currentDeviceId } = get()
     if (selectedIds.size === 0) return
 
     try {
-      await api.batchFavoriteHTTPEvents(deviceId, Array.from(selectedIds), isFavorite)
-      // 更新 events 和 listItems
-      const newEvents = events.map((e) => (selectedIds.has(e.id) ? { ...e, isFavorite } : e))
-      const newListItems = listItems.map((item) =>
-        !isSessionDivider(item) && selectedIds.has(item.id)
-          ? { ...item, isFavorite }
-          : item
-      )
-      const filteredItems = filterItems(newListItems, filters)
-      set({
-        events: newEvents,
-        listItems: newListItems,
-        filteredItems,
-      })
+      // 使用 URL 级别的收藏，批量更新
+      const { addFavorite, removeFavorite } = useFavoriteUrlStore.getState()
+
+      // 获取选中事件的 URL 列表
+      const selectedEvents = events.filter(e => selectedIds.has(e.id))
+      for (const event of selectedEvents) {
+        if (isFavorite) {
+          addFavorite(deviceId, event.url)
+        } else {
+          removeFavorite(deviceId, event.url)
+        }
+      }
+
+      // 重新过滤
+      const filteredItems = filterItems(listItems, filters, currentDeviceId ?? undefined)
+      set({ filteredItems })
+
       // 返回成功数量供调用方使用
       return selectedIds.size
     } catch (error) {
