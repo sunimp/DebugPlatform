@@ -314,3 +314,40 @@ struct AddHTTPEventReplay: AsyncMigration {
             .update()
     }
 }
+
+// MARK: - Add Sequence Number Migration
+
+/// 为 HTTP 事件、Log 事件、WebSocket 帧添加序号字段
+/// 序号在设备维度递增，删除数据后原有数据的序号不变
+struct AddSequenceNumber: AsyncMigration {
+    func prepare(on database: Database) async throws {
+        // HTTP 事件添加序号
+        try await database.schema("http_events")
+            .field("seq_num", .int64, .required, .sql(.default(0)))
+            .update()
+
+        // Log 事件添加序号
+        try await database.schema("log_events")
+            .field("seq_num", .int64, .required, .sql(.default(0)))
+            .update()
+
+        // WebSocket 帧添加序号
+        try await database.schema("ws_frames")
+            .field("seq_num", .int64, .required, .sql(.default(0)))
+            .update()
+    }
+
+    func revert(on database: Database) async throws {
+        try await database.schema("http_events")
+            .deleteField("seq_num")
+            .update()
+
+        try await database.schema("log_events")
+            .deleteField("seq_num")
+            .update()
+
+        try await database.schema("ws_frames")
+            .deleteField("seq_num")
+            .update()
+    }
+}

@@ -5,14 +5,14 @@
 // Copyright © 2025 Sun. All rights reserved.
 //
 
-import { useEffect, useCallback, useState, useRef } from 'react'
+import { useEffect, useCallback, useState, useRef, useMemo } from 'react'
 import clsx from 'clsx'
 import { useDBStore } from '@/stores/dbStore'
 import { useProtobufStore } from '@/stores/protobufStore'
 import { ProtobufConfigPanel } from './ProtobufConfigPanel'
 import { BlobCell, isBase64Blob } from './BlobCell'
 import { ListLoadingOverlay } from './ListLoadingOverlay'
-import { LogIcon, LightningIcon, DatabaseIcon, WarningIcon, LockIcon, ArrowUpIcon, ArrowDownIcon, EditIcon, ClipboardIcon, PackageIcon } from './icons'
+import { LogIcon, LightningIcon, DatabaseIcon, WarningIcon, LockIcon, ArrowUpIcon, ArrowDownIcon, EditIcon, ClipboardIcon, PackageIcon, SearchIcon, XIcon } from './icons'
 
 interface DBInspectorProps {
     deviceId: string
@@ -72,8 +72,30 @@ export function DBInspector({ deviceId }: DBInspectorProps) {
     const { descriptorMeta, getColumnConfig } = useProtobufStore()
     const [showProtobufConfig, setShowProtobufConfig] = useState(false)
 
+    // 列筛选状态：columnName -> filterValue
+    const [columnFilters, setColumnFilters] = useState<Record<string, string>>({})
+    // 展开的筛选列
+    const [expandedFilterColumn, setExpandedFilterColumn] = useState<string | null>(null)
+
+    // 双击单元格弹出框状态
+    const [cellDetailPopup, setCellDetailPopup] = useState<{
+        value: string
+        columnName: string
+        position: { x: number; y: number }
+    } | null>(null)
+
     // 跟踪 deviceId 变化
     const prevDeviceIdRef = useRef(deviceId)
+
+    // 切换表时清空筛选
+    const prevTableRef = useRef(selectedTable)
+    useEffect(() => {
+        if (prevTableRef.current !== selectedTable) {
+            setColumnFilters({})
+            setExpandedFilterColumn(null)
+            prevTableRef.current = selectedTable
+        }
+    }, [selectedTable])
 
     // 设备切换时重置状态并重新加载
     useEffect(() => {
@@ -127,6 +149,78 @@ export function DBInspector({ deviceId }: DBInspectorProps) {
     const handlePageChange = useCallback((newPage: number) => {
         setPageAndReload(deviceId, newPage)
     }, [setPageAndReload, deviceId])
+
+    // 处理列筛选
+    const handleColumnFilter = useCallback((column: string, value: string) => {
+        setColumnFilters(prev => {
+            if (value === '') {
+                // eslint-disable-next-line @typescript-eslint/no-unused-vars
+                const { [column]: _, ...rest } = prev
+                return rest
+            }
+            return { ...prev, [column]: value }
+        })
+    }, [])
+
+    // 清除单列筛选
+    const clearColumnFilter = useCallback((column: string) => {
+        setColumnFilters(prev => {
+            // eslint-disable-next-line @typescript-eslint/no-unused-vars
+            const { [column]: _, ...rest } = prev
+            return rest
+        })
+        setExpandedFilterColumn(null)
+    }, [])
+
+    // 清除所有筛选
+    const clearAllFilters = useCallback(() => {
+        setColumnFilters({})
+        setExpandedFilterColumn(null)
+    }, [])
+
+    // 处理双击单元格显示完整数据
+    const handleCellDoubleClick = useCallback((
+        e: React.MouseEvent,
+        value: string | null,
+        columnName: string
+    ) => {
+        if (value === null) return
+        const rect = (e.target as HTMLElement).getBoundingClientRect()
+        setCellDetailPopup({
+            value,
+            columnName,
+            position: {
+                x: Math.min(rect.left, window.innerWidth - 400),
+                y: Math.min(rect.bottom + 5, window.innerHeight - 300)
+            }
+        })
+    }, [])
+
+    // 复制文本到剪贴板
+    const copyToClipboard = useCallback(async (text: string) => {
+        try {
+            await navigator.clipboard.writeText(text)
+        } catch (err) {
+            console.error('Failed to copy:', err)
+        }
+    }, [])
+
+    // 根据筛选条件过滤数据（客户端筛选）
+    const filteredRows = useMemo(() => {
+        if (!tableData?.rows) return []
+        const filterEntries = Object.entries(columnFilters)
+        if (filterEntries.length === 0) return tableData.rows
+
+        return tableData.rows.filter(row => {
+            return filterEntries.every(([column, filterValue]) => {
+                const cellValue = row.values[column]
+                if (cellValue === null || cellValue === undefined) {
+                    return filterValue.toLowerCase() === 'null'
+                }
+                return String(cellValue).toLowerCase().includes(filterValue.toLowerCase())
+            })
+        })
+    }, [tableData?.rows, columnFilters])
 
     // 格式化文件大小
     const formatBytes = (bytes: number | null) => {
@@ -526,6 +620,26 @@ export function DBInspector({ deviceId }: DBInspectorProps) {
                             </div>
                         )}
 
+                        {/* 筛选状态提示 */}
+                        {Object.keys(columnFilters).length > 0 && (
+                            <div className="px-4 py-2 border-b border-border bg-primary/10 flex items-center justify-between">
+                                <div className="flex items-center gap-2 text-xs text-primary">
+                                    <SearchIcon size={14} />
+                                    <span>
+                                        已筛选 {Object.keys(columnFilters).length} 列，
+                                        显示 {filteredRows.length} / {tableData?.rows.length ?? 0} 行
+                                    </span>
+                                </div>
+                                <button
+                                    onClick={clearAllFilters}
+                                    className="text-xs text-primary hover:text-primary/80 flex items-center gap-1"
+                                >
+                                    <XIcon size={12} />
+                                    清除筛选
+                                </button>
+                            </div>
+                        )}
+
                         {/* 表数据 */}
                         <div className="flex-1 overflow-auto relative">
                             {/* 刷新加载覆盖层 */}
@@ -533,30 +647,91 @@ export function DBInspector({ deviceId }: DBInspectorProps) {
 
                             {tableData ? (
                                 <table className="w-full text-xs">
-                                    <thead className="sticky top-0 bg-bg-dark">
+                                    <thead className="sticky top-0 bg-bg-dark z-10">
+                                        {/* 列名行 */}
                                         <tr>
-                                            {tableData.columns.map((col) => (
-                                                <th
-                                                    key={col.name}
-                                                    onClick={() => handleSort(col.name)}
-                                                    className="px-3 py-2 text-left font-medium text-text-muted border-b border-border cursor-pointer hover:bg-bg-light/50 transition-colors"
-                                                >
-                                                    <div className="flex items-center gap-1">
-                                                        <span className={col.primaryKey ? 'text-primary' : ''}>
-                                                            {col.name}
-                                                        </span>
-                                                        {orderBy === col.name && (
-                                                            <span className="text-primary">
-                                                                {ascending ? <ArrowUpIcon size={12} /> : <ArrowDownIcon size={12} />}
+                                            {tableData.columns.map((col) => {
+                                                const isFiltered = columnFilters[col.name] !== undefined
+                                                const isExpanded = expandedFilterColumn === col.name
+
+                                                return (
+                                                    <th
+                                                        key={col.name}
+                                                        className="px-3 py-2 text-left font-medium text-text-muted border-b border-border"
+                                                    >
+                                                        <div className="flex items-center gap-1">
+                                                            {/* 列名（点击排序） */}
+                                                            <span
+                                                                onClick={() => handleSort(col.name)}
+                                                                className={clsx(
+                                                                    'cursor-pointer hover:text-text-secondary transition-colors',
+                                                                    col.primaryKey ? 'text-primary' : ''
+                                                                )}
+                                                            >
+                                                                {col.name}
                                                             </span>
+
+                                                            {/* 排序图标 */}
+                                                            {orderBy === col.name && (
+                                                                <span className="text-primary">
+                                                                    {ascending ? <ArrowUpIcon size={12} /> : <ArrowDownIcon size={12} />}
+                                                                </span>
+                                                            )}
+
+                                                            {/* 筛选按钮 */}
+                                                            <button
+                                                                onClick={(e) => {
+                                                                    e.stopPropagation()
+                                                                    setExpandedFilterColumn(isExpanded ? null : col.name)
+                                                                }}
+                                                                className={clsx(
+                                                                    'ml-auto p-0.5 rounded hover:bg-bg-light/50 transition-colors',
+                                                                    isFiltered ? 'text-primary' : 'text-text-muted opacity-50 hover:opacity-100'
+                                                                )}
+                                                                title="筛选"
+                                                            >
+                                                                <SearchIcon size={12} />
+                                                            </button>
+                                                        </div>
+
+                                                        {/* 筛选输入框（展开时显示） */}
+                                                        {isExpanded && (
+                                                            <div className="mt-2 flex items-center gap-1">
+                                                                <input
+                                                                    type="text"
+                                                                    value={columnFilters[col.name] ?? ''}
+                                                                    onChange={(e) => handleColumnFilter(col.name, e.target.value)}
+                                                                    placeholder={`筛选 ${col.name}...`}
+                                                                    className="flex-1 px-2 py-1 text-xs bg-bg-light border border-border rounded focus:outline-none focus:ring-1 focus:ring-primary text-text-secondary"
+                                                                    autoFocus
+                                                                    onClick={(e) => e.stopPropagation()}
+                                                                    onKeyDown={(e) => {
+                                                                        if (e.key === 'Enter' || e.key === 'Escape') {
+                                                                            setExpandedFilterColumn(null)
+                                                                        }
+                                                                    }}
+                                                                />
+                                                                {isFiltered && (
+                                                                    <button
+                                                                        onClick={(e) => {
+                                                                            e.stopPropagation()
+                                                                            clearColumnFilter(col.name)
+                                                                        }}
+                                                                        className="p-1 text-text-muted hover:text-red-400 transition-colors"
+                                                                        title="清除筛选"
+                                                                    >
+                                                                        <XIcon size={12} />
+                                                                    </button>
+                                                                )}
+                                                            </div>
                                                         )}
-                                                    </div>
-                                                </th>
-                                            ))}
+                                                    </th>
+                                                )
+                                            })}
                                         </tr>
                                     </thead>
                                     <tbody className="font-mono">
-                                        {tableData.rows.map((row, idx) => (
+                                        {filteredRows.map((row, idx) => (
                                             <tr
                                                 key={idx}
                                                 className="border-b border-border hover:bg-bg-light/30 transition-colors"
@@ -570,7 +745,9 @@ export function DBInspector({ deviceId }: DBInspectorProps) {
                                                     return (
                                                         <td
                                                             key={col.name}
-                                                            className="px-3 py-2 text-text-secondary max-w-xs"
+                                                            className="px-3 py-2 text-text-secondary max-w-xs cursor-pointer"
+                                                            onDoubleClick={(e) => handleCellDoubleClick(e, cellValue, col.name)}
+                                                            title="双击查看完整内容"
                                                         >
                                                             {cellValue === null ? (
                                                                 <span className="text-text-muted italic">NULL</span>
@@ -582,7 +759,7 @@ export function DBInspector({ deviceId }: DBInspectorProps) {
                                                                     columnName={col.name}
                                                                 />
                                                             ) : (
-                                                                <span className="truncate block" title={cellValue ?? ''}>
+                                                                <span className="truncate block">
                                                                     {cellValue}
                                                                 </span>
                                                             )}
@@ -647,6 +824,52 @@ export function DBInspector({ deviceId }: DBInspectorProps) {
                     </div>
                 )}
             </div>
+
+            {/* 单元格详情弹出框 */}
+            {cellDetailPopup && (
+                <div
+                    className="fixed inset-0 z-50"
+                    onClick={() => setCellDetailPopup(null)}
+                >
+                    <div
+                        className="absolute bg-bg-dark border border-border rounded-lg shadow-xl max-w-md max-h-80 overflow-hidden flex flex-col"
+                        style={{
+                            left: cellDetailPopup.position.x,
+                            top: cellDetailPopup.position.y,
+                        }}
+                        onClick={(e) => e.stopPropagation()}
+                    >
+                        {/* 标题栏 */}
+                        <div className="px-3 py-2 border-b border-border bg-bg-light/50 flex items-center justify-between">
+                            <span className="text-xs font-medium text-text-muted">
+                                {cellDetailPopup.columnName}
+                            </span>
+                            <button
+                                onClick={() => setCellDetailPopup(null)}
+                                className="p-1 text-text-muted hover:text-red-400 transition-colors"
+                                title="关闭"
+                            >
+                                <XIcon size={14} />
+                            </button>
+                        </div>
+                        {/* 内容区域 */}
+                        <div className="p-3 overflow-auto flex-1 flex gap-2">
+                            <pre className="flex-1 text-xs text-text-secondary whitespace-pre-wrap break-all font-mono select-text">
+                                {cellDetailPopup.value}
+                            </pre>
+                            <button
+                                onClick={() => {
+                                    copyToClipboard(cellDetailPopup.value)
+                                }}
+                                className="flex-shrink-0 self-start p-1.5 text-text-muted hover:text-primary hover:bg-bg-light/50 rounded transition-colors"
+                                title="复制内容"
+                            >
+                                <ClipboardIcon size={14} />
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
     )
 }

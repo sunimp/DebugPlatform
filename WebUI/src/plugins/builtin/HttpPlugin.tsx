@@ -137,7 +137,14 @@ function HttpPluginView({ context, isActive }: PluginRenderProps) {
     // 批量删除
     const handleBatchDelete = useCallback(async () => {
         if (deviceId) {
-            const count = httpStore.selectedIds.size
+            // 从 store 获取最新的 selectedIds
+            const selectedIds = useHTTPStore.getState().selectedIds
+            const count = selectedIds.size
+            if (count === 0) {
+                toast.show('warning', '没有选中任何请求')
+                setShowBatchDeleteConfirm(false)
+                return
+            }
             try {
                 await httpStore.batchDelete(deviceId)
                 toast.show('success', `已删除 ${count} 条请求`)
@@ -146,7 +153,7 @@ function HttpPluginView({ context, isActive }: PluginRenderProps) {
             }
             setShowBatchDeleteConfirm(false)
         }
-    }, [deviceId, toast])
+    }, [deviceId, httpStore, toast])
 
     // 批量导出选中
     const handleExportSelected = useCallback(() => {

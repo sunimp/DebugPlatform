@@ -226,18 +226,41 @@ export const useDBStore = create<DBState>((set, get) => ({
     setSort: (column: string) => {
         const { orderBy, ascending } = get()
         if (orderBy === column) {
-            set({ ascending: !ascending, page: 1 })
+            // 三态循环：升序 → 降序 → 默认
+            if (ascending) {
+                // 当前是升序，切换到降序
+                set({ ascending: false, page: 1 })
+            } else {
+                // 当前是降序，切换到默认（无排序）
+                set({ orderBy: null, ascending: true, page: 1 })
+            }
         } else {
+            // 点击新列，设置为升序
             set({ orderBy: column, ascending: true, page: 1 })
         }
     },
 
     // 带自动重载的排序
     setSortAndReload: async (deviceId: string, column: string) => {
-        const { orderBy, ascending, selectedDb, selectedTable } = get()
-        const newAscending = orderBy === column ? !ascending : true
+        const { orderBy, ascending, selectedDb, selectedTable, pageSize } = get()
+
+        let newOrderBy: string | null = column
+        let newAscending = true
+
+        if (orderBy === column) {
+            // 三态循环：升序 → 降序 → 默认
+            if (ascending) {
+                // 当前是升序，切换到降序
+                newAscending = false
+            } else {
+                // 当前是降序，切换到默认（无排序）
+                newOrderBy = null
+                newAscending = true
+            }
+        }
+
         set({
-            orderBy: column,
+            orderBy: newOrderBy,
             ascending: newAscending,
             page: 1,
             dataLoading: true
@@ -247,8 +270,8 @@ export const useDBStore = create<DBState>((set, get) => ({
             try {
                 const result = await api.fetchTablePage(deviceId, selectedDb, selectedTable, {
                     page: 1,
-                    pageSize: get().pageSize,
-                    orderBy: column,
+                    pageSize: pageSize,
+                    orderBy: newOrderBy ?? undefined,
                     ascending: newAscending,
                 })
                 set({ tableData: result, dataLoading: false })

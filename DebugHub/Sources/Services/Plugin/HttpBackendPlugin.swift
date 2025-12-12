@@ -225,7 +225,8 @@ public final class HttpBackendPlugin: BackendPlugin, @unchecked Sendable {
                 startTime: event.startTime,
                 isMocked: event.isMocked,
                 isFavorite: event.isFavorite,
-                isReplay: event.isReplay
+                isReplay: event.isReplay,
+                seqNum: event.seqNum
             )
         }
 
@@ -403,6 +404,7 @@ struct PluginHTTPEventSummaryDTO: Content {
     let isMocked: Bool
     let isFavorite: Bool
     let isReplay: Bool
+    let seqNum: Int64
 }
 
 struct PluginHTTPEventDetailDTO: Content {

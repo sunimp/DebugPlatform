@@ -217,7 +217,7 @@ final class RealtimeStreamHandler: LifecycleHandler, @unchecked Sendable {
         }
     }
 
-    func broadcast(events: [DebugEventDTO], deviceId: String) {
+    func broadcast(events: [DebugEventDTO], deviceId: String, seqNumMap: [String: Int64] = [:]) {
         lock.lock()
         let currentSubscribers = Array(subscribers.values)
         lock.unlock()
@@ -244,22 +244,46 @@ final class RealtimeStreamHandler: LifecycleHandler, @unchecked Sendable {
 
         for event in events {
             let messageType: RealtimeMessage.MessageType
-            let payloadJSON: String
+            var payloadJSON: String
 
             do {
                 switch event {
                 case let .http(httpEvent):
                     messageType = .httpEvent
-                    payloadJSON = try String(data: encoder.encode(httpEvent), encoding: .utf8) ?? "{}"
+                    // 添加序号到 payload
+                    var dict = try JSONSerialization.jsonObject(with: encoder.encode(httpEvent)) as? [String: Any] ?? [:]
+                    if let seqNum = seqNumMap[httpEvent.request.id] {
+                        dict["seqNum"] = seqNum
+                    }
+                    let enrichedData = try JSONSerialization.data(withJSONObject: dict)
+                    payloadJSON = String(data: enrichedData, encoding: .utf8) ?? "{}"
 
                 case let .webSocket(wsEvent):
                     messageType = .wsEvent
-                    payloadJSON = try String(data: encoder.encode(wsEvent), encoding: .utf8) ?? "{}"
+                    // 对于 frame 事件添加序号
+                    var dict = try JSONSerialization.jsonObject(with: encoder.encode(wsEvent)) as? [String: Any] ?? [:]
+                    if case let .frame(frame) = wsEvent.kind, let seqNum = seqNumMap[frame.id] {
+                        // frame 数据在 kind.frame 中，需要深入修改
+                        if var kind = dict["kind"] as? [String: Any],
+                           var frameDict = kind["frame"] as? [String: Any] {
+                            frameDict["seqNum"] = seqNum
+                            kind["frame"] = frameDict
+                            dict["kind"] = kind
+                        }
+                    }
+                    let enrichedData = try JSONSerialization.data(withJSONObject: dict)
+                    payloadJSON = String(data: enrichedData, encoding: .utf8) ?? "{}"
                     print("[RealtimeStream] WS event payload: \(payloadJSON.prefix(200))...")
 
                 case let .log(logEvent):
                     messageType = .logEvent
-                    payloadJSON = try String(data: encoder.encode(logEvent), encoding: .utf8) ?? "{}"
+                    // 添加序号到 payload
+                    var dict = try JSONSerialization.jsonObject(with: encoder.encode(logEvent)) as? [String: Any] ?? [:]
+                    if let seqNum = seqNumMap[logEvent.id] {
+                        dict["seqNum"] = seqNum
+                    }
+                    let enrichedData = try JSONSerialization.data(withJSONObject: dict)
+                    payloadJSON = String(data: enrichedData, encoding: .utf8) ?? "{}"
 
                 case let .stats(statsEvent):
                     messageType = .stats

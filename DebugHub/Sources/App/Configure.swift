@@ -42,6 +42,7 @@ func configure(_ app: Application) throws {
     app.migrations.add(CreatePerformanceMetrics())
     app.migrations.add(CreateJankEvent())
     app.migrations.add(CreateAlert())
+    app.migrations.add(AddSequenceNumber())
 
     // 运行迁移
     try app.autoMigrate().wait()

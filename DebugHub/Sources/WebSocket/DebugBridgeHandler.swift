@@ -192,15 +192,15 @@ final class DebugBridgeHandler: @unchecked Sendable {
 
         // 异步处理事件入库
         Task {
-            let extraEvents = await EventIngestor.shared.ingest(events: events, deviceId: deviceId, db: req.db)
+            let result = await EventIngestor.shared.ingest(events: events, deviceId: deviceId, db: req.db)
 
             // 如果有额外生成的事件（如自动创建的 WS session），先广播这些事件
-            if !extraEvents.isEmpty {
-                RealtimeStreamHandler.shared.broadcast(events: extraEvents, deviceId: deviceId)
+            if !result.extraEvents.isEmpty {
+                RealtimeStreamHandler.shared.broadcast(events: result.extraEvents, deviceId: deviceId)
             }
 
-            // 广播原始事件给实时流订阅者
-            RealtimeStreamHandler.shared.broadcast(events: events, deviceId: deviceId)
+            // 广播原始事件给实时流订阅者（带序号）
+            RealtimeStreamHandler.shared.broadcast(events: events, deviceId: deviceId, seqNumMap: result.seqNumMap)
 
             // 将 performance 事件路由到 PerformanceBackendPlugin
             for event in events {

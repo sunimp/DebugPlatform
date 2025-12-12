@@ -1130,6 +1130,7 @@ struct PluginLogEventItemDTO: Content {
     let timestamp: Date
     let subsystem: String?
     let category: String?
+    let seqNum: Int64
 
     init(from model: LogEventModel) {
         id = model.id ?? ""
@@ -1138,6 +1139,7 @@ struct PluginLogEventItemDTO: Content {
         timestamp = model.timestamp
         subsystem = model.subsystem
         category = model.category
+        seqNum = model.seqNum
     }
 }
 
@@ -1219,6 +1221,7 @@ struct WSFrameDTO: Content {
     let payloadSize: Int
     let timestamp: Date
     let isMocked: Bool
+    let seqNum: Int64
 
     init(from model: WSFrameModel) {
         id = model.id ?? ""
@@ -1228,6 +1231,7 @@ struct WSFrameDTO: Content {
         payloadSize = model.payload.count
         timestamp = model.timestamp
         isMocked = model.isMocked
+        seqNum = model.seqNum
     }
 }
 

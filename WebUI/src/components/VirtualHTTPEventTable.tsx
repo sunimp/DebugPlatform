@@ -252,12 +252,12 @@ export function VirtualHTTPEventTable({
         }
     }, [isSelectMode, onToggleSelect, onSelect, selectedId])
 
-    const renderEventRowContent = (event: HTTPEventSummary, index: number) => {
+    const renderEventRowContent = (event: HTTPEventSummary, _index: number) => {
         const isError = !event.statusCode || event.statusCode >= 400
         const isSelected = event.id === selectedId
         const isChecked = selectedIds.has(event.id)
-        // 序号：从 1 开始
-        const rowNumber = index + 1
+        // 使用后端返回的序号，保证删除数据后原有序号不变
+        const rowNumber = event.seqNum
 
         // 使用 URL 级别的收藏状态（优先于请求级别的状态）
         const isFavorite = deviceId ? isUrlFavorite(deviceId, event.url) : event.isFavorite

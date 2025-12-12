@@ -106,6 +106,9 @@ final class DataCleanupService: LifecycleHandler, @unchecked Sendable {
             try await ChaosRuleModel.query(on: db).delete()
             try await TrafficRuleModel.query(on: db).delete()
 
+            // 重置序号缓存
+            await SequenceNumberManager.shared.resetAll()
+
             let totalDeleted = httpCount + logCount + wsFrameCount + wsSessionCount + deviceSessionCount
             let totalRulesDeleted = mockRuleCount + breakpointRuleCount + chaosRuleCount + trafficRuleCount
 

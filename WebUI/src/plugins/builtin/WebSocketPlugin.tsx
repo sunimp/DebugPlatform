@@ -114,6 +114,7 @@ class WebSocketPluginImpl implements FrontendPlugin {
                     payloadPreview?: string
                     timestamp: string
                     isMocked: boolean
+                    seqNum?: number
                 }
 
                 // 如果会话不存在，先创建一个占位会话
@@ -155,6 +156,7 @@ class WebSocketPluginImpl implements FrontendPlugin {
                     payloadSize,
                     timestamp: frame.timestamp,
                     isMocked: frame.isMocked,
+                    seqNum: frame.seqNum ?? 0,
                 })
             }
         }

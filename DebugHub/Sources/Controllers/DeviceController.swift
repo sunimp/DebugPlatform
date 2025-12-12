@@ -180,6 +180,9 @@ struct DeviceController: RouteCollection {
             .filter(\.$deviceId == deviceId)
             .delete()
 
+        // 重置该设备的序号缓存
+        await SequenceNumberManager.shared.reset(for: deviceId)
+
         return .ok
     }
 }

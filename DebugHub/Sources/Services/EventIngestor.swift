@@ -9,30 +9,45 @@ import Fluent
 import Foundation
 import Vapor
 
+/// 入库结果，包含额外事件和带序号的事件
+struct IngestResult {
+    /// 需要额外广播的事件（如自动创建的 WS session）
+    let extraEvents: [DebugEventDTO]
+    /// 事件序号映射：事件 ID -> seqNum
+    let seqNumMap: [String: Int64]
+}
+
 /// 事件接收器，负责将事件写入数据库
 final class EventIngestor: @unchecked Sendable {
     static let shared = EventIngestor()
 
     private init() {}
 
-    /// 入库事件并返回额外生成的事件（如自动创建的 WS session）
-    /// - Returns: 需要额外广播的事件列表
-    func ingest(events: [DebugEventDTO], deviceId: String, db: Database) async -> [DebugEventDTO] {
+    /// 入库事件并返回入库结果
+    /// - Returns: 入库结果，包含额外事件和序号映射
+    func ingest(events: [DebugEventDTO], deviceId: String, db: Database) async -> IngestResult {
         var extraEvents: [DebugEventDTO] = []
+        var seqNumMap: [String: Int64] = [:]
 
         for event in events {
             do {
                 switch event {
                 case let .http(httpEvent):
-                    try await ingestHTTPEvent(httpEvent, deviceId: deviceId, db: db)
+                    let seqNum = try await ingestHTTPEvent(httpEvent, deviceId: deviceId, db: db)
+                    seqNumMap[httpEvent.request.id] = seqNum
 
                 case let .webSocket(wsEvent):
-                    if let extraEvent = try await ingestWSEvent(wsEvent, deviceId: deviceId, db: db) {
+                    let result = try await ingestWSEvent(wsEvent, deviceId: deviceId, db: db)
+                    if let extraEvent = result.extraEvent {
                         extraEvents.append(extraEvent)
+                    }
+                    if let frameId = result.frameId, let seqNum = result.seqNum {
+                        seqNumMap[frameId] = seqNum
                     }
 
                 case let .log(logEvent):
-                    try await ingestLogEvent(logEvent, deviceId: deviceId, db: db)
+                    let seqNum = try await ingestLogEvent(logEvent, deviceId: deviceId, db: db)
+                    seqNumMap[logEvent.id] = seqNum
 
                 case .stats:
                     // Stats 事件暂不持久化，仅用于实时展示
@@ -48,12 +63,12 @@ final class EventIngestor: @unchecked Sendable {
             }
         }
 
-        return extraEvents
+        return IngestResult(extraEvents: extraEvents, seqNumMap: seqNumMap)
     }
 
     // MARK: - HTTP Event
 
-    private func ingestHTTPEvent(_ event: HTTPEventDTO, deviceId: String, db: Database) async throws {
+    private func ingestHTTPEvent(_ event: HTTPEventDTO, deviceId: String, db: Database) async throws -> Int64 {
         let encoder = JSONEncoder()
 
         // 编码 timing 数据
@@ -82,6 +97,9 @@ final class EventIngestor: @unchecked Sendable {
         }
         let bodyParamsJSON = (try? String(data: encoder.encode(bodyParams), encoding: .utf8)) ?? "{}"
 
+        // 获取下一个序号
+        let seqNum = await SequenceNumberManager.shared.nextSeqNum(for: deviceId, type: .http, db: db)
+
         let model = try HTTPEventModel(
             id: event.request.id,
             deviceId: deviceId,
@@ -102,7 +120,8 @@ final class EventIngestor: @unchecked Sendable {
             mockRuleId: event.mockRuleId,
             traceId: event.request.traceId,
             timingJSON: timingJSON,
-            isReplay: event.isReplay ?? false
+            isReplay: event.isReplay ?? false,
+            seqNum: seqNum
         )
 
         try await model.save(on: db)
@@ -118,6 +137,8 @@ final class EventIngestor: @unchecked Sendable {
             }
             try await paramModels.create(on: db)
         }
+
+        return seqNum
     }
 
     // MARK: - Helpers
@@ -149,8 +170,15 @@ final class EventIngestor: @unchecked Sendable {
 
     // MARK: - WebSocket Event
 
+    /// WS 事件入库结果
+    struct WSIngestResult {
+        let extraEvent: DebugEventDTO?
+        let frameId: String?
+        let seqNum: Int64?
+    }
+
     /// 入库 WS 事件，如果自动创建了 session，返回对应的 sessionCreated 事件用于广播
-    private func ingestWSEvent(_ event: WSEventDTO, deviceId: String, db: Database) async throws -> DebugEventDTO? {
+    private func ingestWSEvent(_ event: WSEventDTO, deviceId: String, db: Database) async throws -> WSIngestResult {
         let encoder = JSONEncoder()
 
         switch event.kind {
@@ -168,7 +196,7 @@ final class EventIngestor: @unchecked Sendable {
                 closeReason: session.closeReason
             )
             try await model.save(on: db)
-            return nil
+            return WSIngestResult(extraEvent: nil, frameId: nil, seqNum: nil)
 
         case let .sessionClosed(session):
             if let existing = try await WSSessionModel.find(session.id, on: db) {
@@ -177,7 +205,7 @@ final class EventIngestor: @unchecked Sendable {
                 existing.closeReason = session.closeReason
                 try await existing.save(on: db)
             }
-            return nil
+            return WSIngestResult(extraEvent: nil, frameId: nil, seqNum: nil)
 
         case let .frame(frame):
             // 检查对应的 session 是否存在，如果不存在则自动创建
@@ -214,6 +242,7 @@ final class EventIngestor: @unchecked Sendable {
                 extraSessionEvent = .webSocket(WSEventDTO(kind: .sessionCreated(sessionDTO)))
             }
 
+            let seqNum = await SequenceNumberManager.shared.nextSeqNum(for: deviceId, type: .wsFrame, db: db)
             let model = WSFrameModel(
                 id: frame.id,
                 deviceId: deviceId,
@@ -224,17 +253,21 @@ final class EventIngestor: @unchecked Sendable {
                 payloadPreview: frame.payloadPreview,
                 timestamp: frame.timestamp,
                 isMocked: frame.isMocked,
-                mockRuleId: frame.mockRuleId
+                mockRuleId: frame.mockRuleId,
+                seqNum: seqNum
             )
             try await model.save(on: db)
-            return extraSessionEvent
+            return WSIngestResult(extraEvent: extraSessionEvent, frameId: frame.id, seqNum: seqNum)
         }
     }
 
     // MARK: - Log Event
 
-    private func ingestLogEvent(_ event: LogEventDTO, deviceId: String, db: Database) async throws {
+    private func ingestLogEvent(_ event: LogEventDTO, deviceId: String, db: Database) async throws -> Int64 {
         let encoder = JSONEncoder()
+
+        // 获取下一个序号
+        let seqNum = await SequenceNumberManager.shared.nextSeqNum(for: deviceId, type: .log, db: db)
 
         let model = try LogEventModel(
             id: event.id,
@@ -251,10 +284,12 @@ final class EventIngestor: @unchecked Sendable {
             line: event.line,
             message: event.message,
             tags: String(data: encoder.encode(event.tags), encoding: .utf8) ?? "[]",
-            traceId: event.traceId
+            traceId: event.traceId,
+            seqNum: seqNum
         )
 
         try await model.save(on: db)
+        return seqNum
     }
 
     // MARK: - Performance Event

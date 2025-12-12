@@ -143,11 +143,16 @@ export function parseHTTPEvent(payload: string): HTTPEventSummary {
     traceId: data.request.traceId ?? null,
     isFavorite: data.isFavorite ?? false,
     isReplay: data.isReplay ?? false,
+    seqNum: data.seqNum ?? 0,
   }
 }
 
 export function parseLogEvent(payload: string): LogEvent {
-  return JSON.parse(payload)
+  const data = JSON.parse(payload)
+  return {
+    ...data,
+    seqNum: data.seqNum ?? 0,
+  }
 }
 
 export function parseWSEvent(payload: string): { type: string; data: unknown } {

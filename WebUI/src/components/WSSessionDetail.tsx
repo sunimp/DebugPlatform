@@ -242,10 +242,10 @@ function FramesTab({
         ) : (
           <div className="divide-y divide-border">
             {/* 帧列表：后端已按时间降序返回，最新的在顶部 */}
-            {frames.map((frame, index) => {
+            {frames.map((frame) => {
               const isExpanded = expandedFrameId === frame.id
-              // 序号：从 1 开始
-              const rowNumber = index + 1
+              // 使用后端返回的序号，保证删除数据后原有序号不变
+              const rowNumber = frame.seqNum
               return (
                 <FrameItem
                   key={frame.id}

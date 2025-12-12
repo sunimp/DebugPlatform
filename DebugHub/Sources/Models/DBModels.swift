@@ -77,6 +77,9 @@ final class HTTPEventModel: Model, Content, @unchecked Sendable {
     @Field(key: "is_replay")
     var isReplay: Bool
 
+    @Field(key: "seq_num")
+    var seqNum: Int64
+
     init() {
         // Fluent 需要一个空的初始化器
         // 非 Optional Bool 类型需要默认值
@@ -104,7 +107,8 @@ final class HTTPEventModel: Model, Content, @unchecked Sendable {
         traceId: String?,
         timingJSON: String? = nil,
         isFavorite: Bool = false,
-        isReplay: Bool = false
+        isReplay: Bool = false,
+        seqNum: Int64 = 0
     ) {
         self.id = id
         self.deviceId = deviceId
@@ -127,6 +131,7 @@ final class HTTPEventModel: Model, Content, @unchecked Sendable {
         self.timingJSON = timingJSON
         self.isFavorite = isFavorite
         self.isReplay = isReplay
+        self.seqNum = seqNum
     }
 }
 
@@ -375,6 +380,9 @@ final class WSFrameModel: Model, Content, @unchecked Sendable {
     @Field(key: "mock_rule_id")
     var mockRuleId: String?
 
+    @Field(key: "seq_num")
+    var seqNum: Int64
+
     init() {}
 
     init(
@@ -387,7 +395,8 @@ final class WSFrameModel: Model, Content, @unchecked Sendable {
         payloadPreview: String?,
         timestamp: Date,
         isMocked: Bool,
-        mockRuleId: String?
+        mockRuleId: String?,
+        seqNum: Int64 = 0
     ) {
         self.id = id
         self.deviceId = deviceId
@@ -399,6 +408,7 @@ final class WSFrameModel: Model, Content, @unchecked Sendable {
         self.timestamp = timestamp
         self.isMocked = isMocked
         self.mockRuleId = mockRuleId
+        self.seqNum = seqNum
     }
 }
 
@@ -452,6 +462,9 @@ final class LogEventModel: Model, Content, @unchecked Sendable {
     @Field(key: "trace_id")
     var traceId: String?
 
+    @Field(key: "seq_num")
+    var seqNum: Int64
+
     init() {}
 
     init(
@@ -469,7 +482,8 @@ final class LogEventModel: Model, Content, @unchecked Sendable {
         line: Int?,
         message: String,
         tags: String,
-        traceId: String?
+        traceId: String?,
+        seqNum: Int64 = 0
     ) {
         self.id = id
         self.deviceId = deviceId
@@ -486,6 +500,7 @@ final class LogEventModel: Model, Content, @unchecked Sendable {
         self.message = message
         self.tags = tags
         self.traceId = traceId
+        self.seqNum = seqNum
     }
 }
 

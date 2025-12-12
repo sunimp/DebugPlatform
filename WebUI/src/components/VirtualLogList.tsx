@@ -154,8 +154,8 @@ export function VirtualLogList({
     const levelStyle = getLogLevelClass(event.level)
     const isChecked = selectedIds.has(event.id)
     const isSelected = !isSelectMode && selectedId === event.id
-    // 序号：从 1 开始
-    const rowNumber = index + 1
+    // 使用后端返回的序号，保证删除数据后原有序号不变
+    const rowNumber = event.seqNum
 
     const handleClick = () => {
       if (isSelectMode) {

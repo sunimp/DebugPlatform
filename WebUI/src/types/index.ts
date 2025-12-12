@@ -55,6 +55,7 @@ export interface HTTPEventSummary {
   traceId: string | null
   isFavorite: boolean
   isReplay: boolean
+  seqNum: number
 }
 
 export interface HTTPTiming {
@@ -119,6 +120,7 @@ export interface LogEvent {
   message: string
   tags: string[]
   traceId: string | null
+  seqNum: number
 }
 
 export interface LogEventListResponse {
@@ -160,6 +162,7 @@ export interface WSFrame {
   payloadSize: number
   timestamp: string
   isMocked: boolean
+  seqNum: number
 }
 
 export interface WSFrameDetail {
