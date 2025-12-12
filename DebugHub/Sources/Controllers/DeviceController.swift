@@ -180,6 +180,21 @@ struct DeviceController: RouteCollection {
             .filter(\.$deviceId == deviceId)
             .delete()
 
+        // 删除性能指标数据
+        try await PerformanceMetricsModel.query(on: req.db)
+            .filter(\.$deviceId == deviceId)
+            .delete()
+
+        // 删除卡顿事件数据
+        try await JankEventModel.query(on: req.db)
+            .filter(\.$deviceId == deviceId)
+            .delete()
+
+        // 删除告警记录
+        try await AlertModel.query(on: req.db)
+            .filter(\.$deviceId == deviceId)
+            .delete()
+
         // 重置该设备的序号缓存
         await SequenceNumberManager.shared.reset(for: deviceId)
 

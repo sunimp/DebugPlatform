@@ -86,6 +86,9 @@ final class DataCleanupService: LifecycleHandler, @unchecked Sendable {
             let wsFrameCount = try await WSFrameModel.query(on: db).count()
             let wsSessionCount = try await WSSessionModel.query(on: db).count()
             let deviceSessionCount = try await DeviceSessionModel.query(on: db).count()
+            let perfMetricsCount = try await PerformanceMetricsModel.query(on: db).count()
+            let jankEventsCount = try await JankEventModel.query(on: db).count()
+            let alertsCount = try await AlertModel.query(on: db).count()
 
             // 统计规则数量
             let mockRuleCount = try await MockRuleModel.query(on: db).count()
@@ -99,6 +102,9 @@ final class DataCleanupService: LifecycleHandler, @unchecked Sendable {
             try await LogEventModel.query(on: db).delete()
             try await HTTPEventModel.query(on: db).delete()
             try await DeviceSessionModel.query(on: db).delete()
+            try await PerformanceMetricsModel.query(on: db).delete()
+            try await JankEventModel.query(on: db).delete()
+            try await AlertModel.query(on: db).delete()
 
             // 删除所有规则
             try await MockRuleModel.query(on: db).delete()
@@ -109,11 +115,11 @@ final class DataCleanupService: LifecycleHandler, @unchecked Sendable {
             // 重置序号缓存
             await SequenceNumberManager.shared.resetAll()
 
-            let totalDeleted = httpCount + logCount + wsFrameCount + wsSessionCount + deviceSessionCount
+            let totalDeleted = httpCount + logCount + wsFrameCount + wsSessionCount + deviceSessionCount + perfMetricsCount + jankEventsCount + alertsCount
             let totalRulesDeleted = mockRuleCount + breakpointRuleCount + chaosRuleCount + trafficRuleCount
 
             app.logger.warning(
-                "Database truncated: HTTP=\(httpCount), Log=\(logCount), WSFrame=\(wsFrameCount), WSSession=\(wsSessionCount), DeviceSession=\(deviceSessionCount), MockRule=\(mockRuleCount), BreakpointRule=\(breakpointRuleCount), ChaosRule=\(chaosRuleCount), TrafficRule=\(trafficRuleCount)"
+                "Database truncated: HTTP=\(httpCount), Log=\(logCount), WSFrame=\(wsFrameCount), WSSession=\(wsSessionCount), DeviceSession=\(deviceSessionCount), PerfMetrics=\(perfMetricsCount), JankEvents=\(jankEventsCount), Alerts=\(alertsCount), MockRule=\(mockRuleCount), BreakpointRule=\(breakpointRuleCount), ChaosRule=\(chaosRuleCount), TrafficRule=\(trafficRuleCount)"
             )
 
             return TruncateResult(
